@@ -245,3 +245,14 @@ def test_root_page_is_cdn_cacheable(monkeypatch):
     handler.end_headers = Mock()
     handler.do_GET()
     assert 's-maxage=3600' in headers['Cache-Control']
+
+
+def test_served_root_page_is_cdn_cacheable(monkeypatch):
+    from fastapi.testclient import TestClient
+    monkeypatch.setattr(index, 'generate_html', lambda: '<html></html>')
+    with TestClient(index.app) as client:
+        response = client.get('/')
+    assert response.status_code == 200
+    assert response.text == '<html></html>'
+    assert response.headers['Cache-Control'] == index.HOME_CACHE_CONTROL
+    assert 's-maxage=3600' in index.HOME_CACHE_CONTROL

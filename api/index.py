@@ -13,8 +13,10 @@ from cities import get_cities_list
 from api.poster import build_poster_from_payload
 from poster_http import create_poster_response, register_public_routes
 
-# FastAPI app for local development with `vercel dev`
+# Vercel serves this module through the FastAPI app; the handler class covers runtimes that pick it.
 app = FastAPI()
+
+HOME_CACHE_CONTROL = "public, s-maxage=3600, stale-while-revalidate=86400"
 
 
 def generate_html() -> str:
@@ -44,7 +46,7 @@ class handler(BaseHTTPRequestHandler):
 
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=86400")
+            self.send_header("Cache-Control", HOME_CACHE_CONTROL)
             self.end_headers()
             self.wfile.write(html_content.encode("utf-8"))
         except Exception as e:
@@ -55,11 +57,10 @@ class handler(BaseHTTPRequestHandler):
             self.wfile.write(error_msg)
 
 
-# FastAPI route for local development with `vercel dev`
 @app.get("/", response_class=HTMLResponse)
 async def root():
-    """Serve the main HTML page (for local dev)."""
-    return generate_html()
+    """Serve the main HTML page."""
+    return HTMLResponse(generate_html(), headers={"Cache-Control": HOME_CACHE_CONTROL})
 
 
 @app.post("/poster")
