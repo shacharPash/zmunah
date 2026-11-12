@@ -1,4 +1,4 @@
-"""Authenticated GitHub Actions reminder endpoint. Targeted calls retain all guards."""
+"""Authenticated reminder endpoint for Vercel Cron and the GitHub Actions backup. Targeted calls retain all guards."""
 
 import base64
 import os
@@ -13,7 +13,7 @@ from reminder_delivery import run_reminders
 
 from omer_utils import get_omer_day, get_omer_count_text, get_sefirah_text, ISRAEL_TZ, omer_event_context
 from redis_client import get_user_prefs
-from telegram_bot import send_message_with_keyboard, send_photo_with_keyboard, download_photo, CITY_BY_NAME, _build_omer_poster_keyboard
+from telegram_bot import TelegramDeliveryError, send_message_with_keyboard, send_photo_with_keyboard, download_photo, CITY_BY_NAME, _build_omer_poster_keyboard
 from api.poster import build_poster_from_payload
 
 # Vercel cron secret for authentication
@@ -36,6 +36,10 @@ def send_omer_reminder(user_id: str, context: dict | None = None) -> bool:
 
     Returns:
         bool: True if sent successfully, False otherwise
+
+    Raises:
+        TelegramDeliveryError: Telegram refused a request, so the caller can
+            tell a blocked recipient or a rate limit from other failures.
     """
     try:
         context = context or omer_event_context()
@@ -54,6 +58,8 @@ def send_omer_reminder(user_id: str, context: dict | None = None) -> bool:
             # Send image reminder (default)
             return _send_image_reminder(chat_id, prefs, nusach, context)
 
+    except TelegramDeliveryError:
+        raise
     except Exception:
         return False
 

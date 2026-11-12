@@ -161,15 +161,47 @@ class BotPreferenceLimit(ValueError):
 class TelegramDeliveryError(RuntimeError):
     """A delivery did not produce a confirmed Telegram success."""
 
+    def __init__(self, message="Telegram request failed", *, error_code=None, description="", retry_after=None):
+        super().__init__(message)
+        self.error_code = error_code
+        self.description = description
+        self.retry_after = retry_after
+
+    @property
+    def recipient_blocked(self) -> bool:
+        """The user blocked the bot or deleted their account, so no retry can succeed.
+
+        Other refusals such as "chat not found" also follow from a wrong bot token
+        and stay ordinary failures.
+        """
+        text = self.description.lower()
+        return self.error_code == 403 and ("blocked by the user" in text or "user is deactivated" in text)
+
+
+def _telegram_error(response, result=None):
+    if result is None:
+        try:
+            result = response.json()
+        except (requests.RequestException, ValueError):
+            result = None
+    fields = result if isinstance(result, dict) else {}
+    error_code = fields.get("error_code") if type(fields.get("error_code")) is int else None
+    description = fields.get("description") if isinstance(fields.get("description"), str) else ""
+    parameters = fields.get("parameters") if isinstance(fields.get("parameters"), dict) else {}
+    retry_after = parameters.get("retry_after") if type(parameters.get("retry_after")) is int else None
+    return TelegramDeliveryError(error_code=error_code, description=description[:200], retry_after=retry_after)
+
 
 def _telegram_result(response):
     try:
         response.raise_for_status()
         result = response.json()
+    except requests.HTTPError:
+        raise _telegram_error(response) from None
     except (requests.RequestException, ValueError):
         raise TelegramDeliveryError("Telegram request failed") from None
     if not isinstance(result, dict) or result.get("ok") is not True:
-        raise TelegramDeliveryError("Telegram request failed")
+        raise _telegram_error(response, result)
     return result
 
 

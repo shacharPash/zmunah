@@ -10,7 +10,8 @@ import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from unittest.mock import Mock, patch
+from types import SimpleNamespace
+from unittest.mock import Mock, call, patch
 
 import pytest
 import redis
@@ -23,7 +24,9 @@ except ImportError:
     _audit_harness = None
 _original_socket_connect = getattr(_audit_harness, '_original_connect', socket.socket.connect)
 
+import omer_utils
 import redis_client as storage
+import reminder_delivery as delivery
 import telegram_bot as bot
 
 
@@ -283,7 +286,7 @@ def test_authenticated_batches_claim_retry_optout_and_morning_count(isolated_red
         for _ in range(10):
             h=request_handler(module,'/?cursor='+cursor,{'Authorization':'Bearer test'});h.do_GET()
             result=json.loads(h.wfile.getvalue())
-            assert result['attempted'] <= 2
+            assert result['attempted'] <= storage.REMINDER_PAGE_SIZE
             cursor=result['cursor']
             if cursor=='0':break
         else:pytest.fail('batch did not terminate')
@@ -498,7 +501,7 @@ def test_sparse_subscribers_have_bounded_scan_work(isolated_redis):
     with patch.object(isolated_redis,'scan',return_value=(0,keys)), patch.object(storage,'get_user_prefs',return_value={}) as get:
         users,cursor=storage.reminder_user_batch('reminder_enabled')
         assert users==[] and len(cursor)==32
-        assert get.call_count<=2
+        assert get.call_count<=storage.REMINDER_PAGE_SIZE
 
 
 def test_partial_failure_preserves_success_receipt(isolated_redis):
@@ -600,18 +603,18 @@ def test_whitespace_message_is_safely_ignored(isolated_redis):
 
 def test_fixed_subscriber_traversal_survives_delivery_key_churn(isolated_redis):
     """Deterministically move live SCAN page boundaries as bookkeeping grows."""
-    for uid in range(1, 7):
+    for uid in range(1, 15):
         storage.update_user_prefs(str(uid), {'reminder_enabled': True})
     calls = {0: 0, 7: 0}
     def scan(cursor, **kwargs):
         cursor = int(cursor)
         calls[cursor] += 1
         if cursor == 0:
-            # The initial response overflows the two-recipient invocation limit.
-            # Re-reading it under churn no longer includes its third candidate.
-            names = ['1', '2', '3', '4'] if calls[0] == 1 else ['1', '2', '4']
+            # The initial response overflows the per-invocation page size.
+            # Re-reading it under churn no longer includes its eleventh candidate.
+            names = [str(uid) for uid in range(1, 13) if calls[0] == 1 or uid != 11]
             return 7, ['zmunah:user:' + uid for uid in names]
-        return 0, ['zmunah:user:5', 'zmunah:user:6']
+        return 0, ['zmunah:user:13', 'zmunah:user:14']
     seen = set()
     cursor = '0'
     with patch.object(isolated_redis, 'scan', side_effect=scan):
@@ -625,7 +628,7 @@ def test_fixed_subscriber_traversal_survives_delivery_key_churn(isolated_redis):
                     seen.add(uid)
             if cursor == '0':
                 break
-    assert seen == {str(uid) for uid in range(1, 7)}
+    assert seen == {str(uid) for uid in range(1, 15)}
     assert calls[0] == calls[7] == 1
 
 
@@ -702,7 +705,7 @@ def test_stale_callback_ack_does_not_gate_deduplicated_action(isolated_redis):
 
 
 def test_saved_pages_expire_fail_closed_and_explicit_restart_is_stable(isolated_redis):
-    for uid in ('12', '123', '456', '789'):
+    for uid in [str(uid) for uid in range(100, 100 + storage.REMINDER_PAGE_SIZE + 2)]:
         storage.update_user_prefs(uid, {'reminder_enabled': True})
     users, cursor = storage.reminder_user_batch('reminder_enabled')
     assert cursor != '0' and len(cursor) == 32
@@ -749,7 +752,7 @@ def test_real_fixed_population_complete_with_bookkeeping_churn(isolated_redis):
     seen = set()
     for _ in range(500):
         users, cursor = storage.reminder_user_batch('reminder_enabled', cursor)
-        assert len(users) <= 2
+        assert len(users) <= storage.REMINDER_PAGE_SIZE
         for uid in users:
             key = f'zmunah:delivery:{uid}:evening:2026-04-04'
             token = storage.acquire_claim(key)
@@ -830,20 +833,20 @@ def test_snapshot_contention_does_not_deadlock_deletion(isolated_redis):
 
 
 def test_saved_page_metadata_is_bounded_and_has_expected_ttls(isolated_redis):
-    for uid in range(1, 8):
+    for uid in range(1, storage.REMINDER_PAGE_SIZE + 6):
         storage.update_user_prefs(str(uid), {'reminder_enabled': True})
     _, cursor = storage.reminder_user_batch('reminder_enabled')
     assert len(cursor) == 32
     for key in isolated_redis.scan_iter(match=storage.REMINDER_PAGE_PREFIX + '*'):
         page = json.loads(isolated_redis.get(key))
-        assert len(page.get('users', [])) <= 2
-        assert 0 < isolated_redis.ttl(key) <= 3600
+        assert len(page.get('users', [])) <= storage.REMINDER_PAGE_SIZE
+        assert storage.EVENT_TTL - 5 < isolated_redis.ttl(key) <= storage.EVENT_TTL
     for key in isolated_redis.scan_iter(match='zmunah:reminder_root:*'):
         assert len(isolated_redis.get(key)) == 32
         assert 3600 < isolated_redis.ttl(key) <= 72 * 3600
     key = storage.REMINDER_PAGE_PREFIX + cursor
     page = json.loads(isolated_redis.get(key))
-    page['users'] = ['1', '2', '3']
+    page['users'] = [str(uid) for uid in range(1, storage.REMINDER_PAGE_SIZE + 2)]
     page.pop('scan', None); page['next'] = '0'
     isolated_redis.set(key, json.dumps(page))
     with pytest.raises(ValueError, match='invalid reminder page'):
@@ -923,3 +926,422 @@ def test_send_message_does_not_accept_edit_noop():
     with patch.object(bot.requests, 'post', return_value=response):
         with pytest.raises(bot.TelegramDeliveryError):
             bot.send_message(123, 'text')
+
+
+OMER_EVENING = omer_utils.ISRAEL_TZ.localize(datetime(2026, 4, 3, 22))
+OMER_EVENT_SCOPE = 'evening:2026-04-04'
+
+
+def call_reminder(module, now, path='/', cron=False):
+    clock = Mock(); clock.now.return_value = now
+    headers = {'Authorization': 'Bearer test'}
+    if cron:
+        headers[delivery.CRON_HEADER] = '0 18 * * *'
+    with patch.object(delivery, 'datetime', clock), patch.object(module, 'CRON_SECRET', 'test'):
+        h = request_handler(module, path, headers)
+        h.do_GET()
+    return h.send_response.call_args.args[0], json.loads(h.wfile.getvalue())
+
+
+def enable_omer_reminders(count):
+    users = [str(uid) for uid in range(1, count + 1)]
+    for uid in users:
+        storage.update_user_prefs(uid, {'reminder_enabled': True})
+    return users
+
+
+def test_telegram_refusals_keep_code_description_and_retry_after():
+    replies = [
+        (403, 'Forbidden: bot was blocked by the user', None),
+        (403, 'Forbidden: user is deactivated', None),
+        (403, "Forbidden: bot can't initiate conversation with a user", None),
+        (400, 'Bad Request: chat not found', None),
+        (400, 'Bad Request: wrong file identifier/HTTP URL specified', None),
+        (429, 'Too Many Requests: retry after 7', 7),
+    ]
+    responses = []
+    for code, text, retry_after in replies:
+        payload = {'ok': False, 'error_code': code, 'description': text}
+        if retry_after:
+            payload['parameters'] = {'retry_after': retry_after}
+        responses.append(telegram_error(code, payload))
+    errors = []
+    with patch.object(bot.requests, 'post', side_effect=responses):
+        for _ in replies:
+            with pytest.raises(bot.TelegramDeliveryError, match='Telegram request failed') as caught:
+                bot.send_message(123, 'text')
+            errors.append(caught.value)
+    assert [(e.error_code, e.retry_after, e.recipient_blocked) for e in errors] == [
+        (403, None, True), (403, None, True), (403, None, False), (400, None, False), (400, None, False), (429, 7, False)]
+    assert not bot.TelegramDeliveryError('Telegram download failed').recipient_blocked
+
+
+@pytest.mark.parametrize('name,sender,transport', [
+    ('omer_morning_reminder', 'send_morning_reminder', 'send_message'),
+    ('omer_reminder', 'send_omer_reminder', 'send_message_with_keyboard'),
+    ('shabbat_reminder', 'send_shabbat_reminder', 'send_photo_with_keyboard'),
+])
+def test_reminder_senders_surface_telegram_refusals(isolated_redis, name, sender, transport):
+    module = importlib.import_module('api.' + name)
+    storage.update_user_prefs('123', {'reminder_type': 'text'})
+    context = omer_utils.omer_event_context(OMER_EVENING)
+    refusal = bot.TelegramDeliveryError(error_code=403, description='Forbidden: bot was blocked by the user')
+    with patch.object(module, transport, side_effect=[refusal, RuntimeError('network')]), \
+            patch.object(module, 'build_poster_from_payload', return_value=b'png', create=True):
+        with pytest.raises(bot.TelegramDeliveryError):
+            getattr(module, sender)('123', context)
+        assert getattr(module, sender)('123', context) is False
+
+
+def test_refused_recipients_do_not_stop_the_run(isolated_redis):
+    module = importlib.import_module('api.omer_reminder')
+    enable_omer_reminders(6)
+    refusals = {'1': (403, 'Forbidden: bot was blocked by the user'),
+                '2': (400, 'Bad Request: chat not found'),
+                '3': (400, 'Bad Request: wrong file identifier/HTTP URL specified'),
+                '4': (403, "Forbidden: bot can't initiate conversation with a user"),
+                '6': (403, 'Forbidden: user is deactivated')}
+    def send(uid, context):
+        if uid in refusals:
+            code, text = refusals[uid]
+            raise bot.TelegramDeliveryError(error_code=code, description=text)
+        return True
+    with patch.object(module, 'send_omer_reminder', side_effect=send) as sender:
+        status, result = call_reminder(module, OMER_EVENING)
+        assert status == 503 and result['status'] == 'partial_failure'
+        assert (result['attempted'], result['sent'], result['undeliverable'], result['failed']) == (6, 1, 2, 3)
+        # Only the user's own block or deleted account turns the reminder off. A wrong bot
+        # token also answers "chat not found" or another 403, so those stay retryable failures.
+        assert [storage.get_user_prefs(uid)['reminder_enabled'] for uid in '123456'] == [False, True, True, True, True, False]
+        done = [storage.claim_completed(f'zmunah:delivery:{uid}:evening:2026-04-04') for uid in '123456']
+        assert done == [True, False, False, False, True, True]
+        sender.reset_mock()
+        status, result = call_reminder(module, OMER_EVENING)
+        # The page leaves out the two users whose reminder is now off; the delivered user is skipped.
+        assert sender.call_count == 3 and result['skipped'] == 1 and result['failed'] == 3
+
+
+def test_delivered_recipient_is_skipped_even_while_busy_in_the_bot(isolated_redis):
+    module = importlib.import_module('api.omer_reminder')
+    enable_omer_reminders(2)
+    key = 'zmunah:delivery:1:evening:2026-04-04'
+    storage.complete_claim(key, storage.acquire_claim(key), storage.EVENT_TTL)
+    with bot.user_processing('1'), patch.object(module, 'send_omer_reminder', return_value=True) as sender:
+        status, result = call_reminder(module, OMER_EVENING, cron=True)
+    assert status == 200 and (result['skipped'], result['sent'], result['failed']) == (1, 1, 0)
+    assert sender.call_args_list == [call('2', sender.call_args.args[1])]
+
+
+def test_rate_limited_send_waits_once_and_retries(isolated_redis):
+    module = importlib.import_module('api.omer_reminder')
+    enable_omer_reminders(2)
+    limited = bot.TelegramDeliveryError(error_code=429, description='Too Many Requests', retry_after=45)
+    with patch.object(module, 'send_omer_reminder', side_effect=[limited, True, limited, limited]) as sender, \
+            patch.object(delivery.time, 'sleep') as sleep:
+        status, result = call_reminder(module, OMER_EVENING)
+    assert sleep.call_args_list == [call(delivery.MAX_RETRY_AFTER)] * 2
+    assert sender.call_count == 4
+    assert (result['sent'], result['failed'], result['attempted']) == (1, 1, 2)
+
+
+def test_cron_call_walks_every_page_and_backup_finds_it_done(isolated_redis):
+    module = importlib.import_module('api.omer_reminder')
+    users = enable_omer_reminders(3 * storage.REMINDER_PAGE_SIZE + 3)
+    with patch.object(module, 'send_omer_reminder', return_value=True) as sender:
+        status, result = call_reminder(module, OMER_EVENING, cron=True)
+        assert status == 200 and result['status'] == 'completed' and result['cursor'] == '0'
+        assert result['sent'] == len(users) and result['pages'] >= 4
+        assert storage.get_reminder_progress(OMER_EVENT_SCOPE)[1] == {'cursor': 'done'}
+        ttl = isolated_redis.ttl(storage.REMINDER_PROGRESS_PREFIX + OMER_EVENT_SCOPE)
+        assert storage.EVENT_TTL - 5 < ttl <= storage.EVENT_TTL
+        status, result = call_reminder(module, OMER_EVENING)
+        assert status == 200 and result['reason'] == 'already_completed' and result['pages'] == 0
+    assert sender.call_count == len(users)
+    assert not isolated_redis.exists(delivery.RUN_LOCK_PREFIX + OMER_EVENT_SCOPE)
+
+
+@pytest.mark.parametrize('seconds_per_send,sent_by_cron', [(25, 10), (100, 3)])
+def test_time_budget_leaves_progress_for_the_backup_run(isolated_redis, seconds_per_send, sent_by_cron):
+    module = importlib.import_module('api.omer_reminder')
+    users = enable_omer_reminders(2 * storage.REMINDER_PAGE_SIZE + 5)
+    now = [0.0]
+    step = [seconds_per_send]
+    delivered = []
+    def send(uid, context):
+        now[0] += step[0]
+        delivered.append(uid)
+        return True
+    clock = SimpleNamespace(monotonic=lambda: now[0], sleep=Mock())
+    with patch.object(delivery, 'time', clock), patch.object(module, 'send_omer_reminder', side_effect=send):
+        status, result = call_reminder(module, OMER_EVENING, cron=True)
+        assert status == 200 and result['status'] == 'in_progress' and result['sent'] == sent_by_cron
+        progress = storage.get_reminder_progress(OMER_EVENT_SCOPE)[1]
+        assert (progress['cursor'] != '0') == (sent_by_cron == storage.REMINDER_PAGE_SIZE)
+        step[0] = 0
+        cursor = '0'
+        for _ in range(10):
+            status, result = call_reminder(module, OMER_EVENING, '/?cursor=' + cursor)
+            assert status == 200 and result['status'] == 'completed'
+            cursor = result['cursor']
+            if cursor == '0':
+                break
+        else:
+            pytest.fail('backup run did not finish')
+    assert sorted(delivered) == sorted(users)
+    assert storage.get_reminder_progress(OMER_EVENT_SCOPE)[1]['cursor'] == 'done'
+
+
+def test_failed_recipient_holds_progress_until_a_later_call_delivers_it(isolated_redis):
+    module = importlib.import_module('api.omer_reminder')
+    users = enable_omer_reminders(2 * storage.REMINDER_PAGE_SIZE + 5)
+    first_page, _ = storage.reminder_user_batch('reminder_enabled', '0', scope=OMER_EVENT_SCOPE)
+    failing = {first_page[-1]}
+    with patch.object(module, 'send_omer_reminder', side_effect=lambda uid, context: uid not in failing) as sender:
+        status, result = call_reminder(module, OMER_EVENING, cron=True)
+        assert status == 503 and result['status'] == 'partial_failure' and result['cursor'] == '0'
+        assert (result['sent'], result['failed']) == (len(users) - 1, 1)
+        assert storage.get_reminder_progress(OMER_EVENT_SCOPE)[1] == {'cursor': '0'}
+        for cron in (True, False):
+            sender.reset_mock()
+            status, result = call_reminder(module, OMER_EVENING, cron=cron)
+            assert status == 503 and (result['sent'], result['failed']) == (0, 1)
+            # Retrying cursor 0 retries the page that failed, not the page after it.
+            assert sender.call_args_list == [call(first_page[-1], sender.call_args.args[1])]
+            assert storage.get_reminder_progress(OMER_EVENT_SCOPE)[1] == {'cursor': '0'}
+        after_midnight = omer_utils.ISRAEL_TZ.localize(datetime(2026, 4, 4, 1))
+        status, result = call_reminder(module, after_midnight)
+        assert status == 503 and result['reason'] == 'missed_window'
+        failing.clear()
+        sender.reset_mock()
+        status, result = call_reminder(module, OMER_EVENING, cron=True)
+        assert status == 200 and result['status'] == 'completed' and (result['sent'], result['failed']) == (1, 0)
+        assert result['skipped'] == len(users) - 1
+    assert storage.get_reminder_progress(OMER_EVENT_SCOPE)[1] == {'cursor': 'done'}
+    status, result = call_reminder(module, after_midnight)
+    assert status == 200 and result['reason'] == 'outside_delivery_window'
+
+
+def test_shabbat_after_noon_is_missed_unless_already_delivered(isolated_redis):
+    module = importlib.import_module('api.shabbat_reminder')
+    storage.update_user_prefs('1', {'shabbat_reminder_enabled': True})
+    friday = omer_utils.ISRAEL_TZ.localize(datetime(2026, 11, 13, 8))
+    with patch.object(module, 'send_shabbat_reminder', return_value=True) as sender:
+        for moment in (friday.replace(hour=12), friday.replace(hour=15)):
+            status, result = call_reminder(module, moment, cron=True)
+            assert status == 503 and result['reason'] == 'missed_window'
+        status, result = call_reminder(module, friday.replace(hour=12), '/?test_user_id=1')
+        assert status == 200 and result['reason'] == 'outside_delivery_window'
+        assert sender.call_count == 0
+        status, result = call_reminder(module, friday.replace(hour=11, minute=59), cron=True)
+        assert status == 200 and result['sent'] == 1
+        status, result = call_reminder(module, friday.replace(hour=13))
+        assert status == 200 and result['reason'] == 'outside_delivery_window'
+        status, result = call_reminder(module, friday - timedelta(days=1))
+        assert status == 200 and result['reason'] == 'outside_delivery_window'
+    assert sender.call_count == 1
+
+
+def test_omer_windows_report_a_missed_event_but_not_an_early_one(isolated_redis):
+    evening = importlib.import_module('api.omer_reminder')
+    morning = importlib.import_module('api.omer_morning_reminder')
+    enable_omer_reminders(1)
+    def at(hour):
+        return omer_utils.ISRAEL_TZ.localize(datetime(2026, 4, 4, hour))
+    with patch.object(evening, 'send_omer_reminder', return_value=True) as evening_send, \
+            patch.object(morning, 'send_morning_reminder', return_value=True) as morning_send:
+        assert call_reminder(evening, at(1))[1]['reason'] == 'missed_window'
+        assert call_reminder(evening, at(15))[1]['reason'] == 'missed_window'
+        status, result = call_reminder(morning, at(5))
+        assert status == 200 and result['reason'] == 'outside_delivery_window'
+        status, result = call_reminder(morning, at(12))
+        assert status == 503 and result['reason'] == 'missed_window'
+        status, result = call_reminder(morning, at(9))
+        assert status == 200 and result['sent'] == 1
+        assert call_reminder(morning, at(12))[1]['reason'] == 'outside_delivery_window'
+        outside_omer = omer_utils.ISRAEL_TZ.localize(datetime(2026, 11, 13, 22))
+        assert call_reminder(evening, outside_omer)[1]['reason'] == 'outside_delivery_window'
+    assert evening_send.call_count == 0 and morning_send.call_count == 1
+
+
+@pytest.mark.parametrize('name,sender_name,field,start', [
+    ('shabbat_reminder', 'send_shabbat_reminder', 'shabbat_reminder_enabled', datetime(2026, 11, 13, 11, 59)),
+    ('omer_reminder', 'send_omer_reminder', 'reminder_enabled', datetime(2026, 4, 3, 23, 59)),
+    ('omer_morning_reminder', 'send_morning_reminder', 'reminder_enabled', datetime(2026, 4, 4, 11, 59)),
+])
+def test_run_that_starts_just_before_the_window_closes_stops_at_the_close(isolated_redis, name, sender_name, field, start):
+    module = importlib.import_module('api.' + name)
+    for uid in '12345':
+        storage.update_user_prefs(uid, {field: True})
+    elapsed = [0.0]
+    def send(uid, context):
+        elapsed[0] += 25
+        return True
+    clock = SimpleNamespace(monotonic=lambda: elapsed[0], sleep=Mock())
+    start = omer_utils.ISRAEL_TZ.localize(start)
+    with patch.object(delivery, 'time', clock), patch.object(module, sender_name, side_effect=send) as sender:
+        status, result = call_reminder(module, start, cron=True)
+        # Sixty seconds remain: recipients start at 0, 25 and 50 seconds, and none at 75.
+        assert status == 200 and result['status'] == 'in_progress' and result['sent'] == 3
+        status, result = call_reminder(module, start + timedelta(minutes=2), cron=True)
+        assert status == 503 and result['reason'] == 'missed_window'
+    assert sender.call_count == 3
+
+
+@pytest.mark.parametrize('name', ['shabbat_reminder', 'omer_reminder', 'omer_morning_reminder'])
+def test_scheduled_call_keeps_redis_active_on_days_with_nothing_to_send(isolated_redis, name):
+    module = importlib.import_module('api.' + name)
+    thursday_outside_omer = omer_utils.ISRAEL_TZ.localize(datetime(2026, 11, 12, 9))
+    with patch.object(module, 'CRON_SECRET', 'test'):
+        h = request_handler(module, '/', {'Authorization': 'Bearer wrong'}); h.do_GET()
+    assert not isolated_redis.exists(storage.KEEPALIVE_KEY)
+    status, result = call_reminder(module, thursday_outside_omer, cron=True)
+    assert status == 200 and result['reason'] == 'outside_delivery_window'
+    assert storage.KEEPALIVE_TTL - 5 < isolated_redis.ttl(storage.KEEPALIVE_KEY) <= storage.KEEPALIVE_TTL
+    # Free Redis Cloud deletes a database after about 14 idle days; every daily job writes.
+    assert storage.KEEPALIVE_TTL > 14 * 24 * 3600
+
+
+def test_overlapping_run_of_the_same_event_is_refused(isolated_redis):
+    module = importlib.import_module('api.omer_reminder')
+    enable_omer_reminders(1)
+    lock = delivery.RUN_LOCK_PREFIX + OMER_EVENT_SCOPE
+    token = storage.acquire_claim(lock, 60)
+    with patch.object(module, 'send_omer_reminder', return_value=True) as sender:
+        status, result = call_reminder(module, OMER_EVENING, cron=True)
+        assert status == 503 and result['status'] == 'busy' and sender.call_count == 0
+        storage.release_claim(lock, token)
+        status, result = call_reminder(module, OMER_EVENING, cron=True)
+        assert status == 200 and result['sent'] == 1
+
+
+def test_progress_is_validated_and_replaced_only_from_the_value_read(isolated_redis):
+    raw, progress = storage.get_reminder_progress(OMER_EVENT_SCOPE)
+    assert raw is None and progress == {'cursor': '0'}
+    replaced, raw = storage.set_reminder_progress(OMER_EVENT_SCOPE, None, {'cursor': 'a' * 32})
+    assert replaced
+    assert storage.set_reminder_progress(OMER_EVENT_SCOPE, None, {'cursor': 'done'}) == (False, '{"cursor":"done"}')
+    assert storage.get_reminder_progress(OMER_EVENT_SCOPE) == (raw, {'cursor': 'a' * 32})
+    for bad in ({'cursor': 'x'}, {'cursor': '0', 'failed': False}, {'cursor': 0}, ['0']):
+        isolated_redis.set(storage.REMINDER_PROGRESS_PREFIX + OMER_EVENT_SCOPE, json.dumps(bad))
+        with pytest.raises(ValueError, match='invalid reminder progress'):
+            storage.get_reminder_progress(OMER_EVENT_SCOPE)
+    module = importlib.import_module('api.omer_reminder')
+    with patch.object(module, 'send_omer_reminder', return_value=True) as sender:
+        status, result = call_reminder(module, OMER_EVENING, cron=True)
+    assert status == 503 and result['error'] == 'unavailable' and sender.call_count == 0
+    with pytest.raises(ValueError, match='scope'):
+        storage.get_reminder_progress('evening:../x')
+
+
+def load_reminder_runner(name):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(name, '.github/scripts/run_reminders.py')
+    runner = importlib.util.module_from_spec(spec); spec.loader.exec_module(runner)
+    return runner
+
+
+def runner_reply(payload, status=200):
+    body = json.dumps(payload).encode()
+    if status != 200:
+        import urllib.error
+        return urllib.error.HTTPError('https://example.test', status, 'unavailable', {}, io.BytesIO(body))
+    response = Mock(); response.__enter__ = Mock(return_value=response); response.__exit__ = Mock(return_value=False)
+    response.read.return_value = body
+    return response
+
+
+def run_reminder_runner(runner, replies):
+    opener = Mock(); opener.open.side_effect = replies
+    values = {'VERCEL_URL': 'https://example.test', 'CRON_SECRET': 'test', 'REMINDER_ENDPOINT': 'omer_reminder'}
+    with patch.dict(os.environ, values, clear=True), patch.object(runner.urllib.request, 'build_opener', return_value=opener), \
+            patch.object(runner.time, 'sleep') as sleep:
+        code = runner.main()
+    cursors = [runner.urllib.parse.parse_qs(runner.urllib.parse.urlparse(c.args[0].full_url).query)['cursor'][0]
+               for c in opener.open.call_args_list]
+    return code, cursors, sleep
+
+
+def test_runner_skips_a_failed_page_and_still_fails_the_run(capsys):
+    runner = load_reminder_runner('reminder_skip_runner')
+    failing = {'status': 'partial_failure', 'failed': 1, 'cursor': 'b' * 32}
+    replies = [runner_reply(failing, 503) for _ in range(runner.ATTEMPTS)]
+    replies.append(runner_reply({'status': 'completed', 'failed': 0, 'undeliverable': 2, 'cursor': '0'}))
+    code, cursors, _ = run_reminder_runner(runner, replies)
+    assert code == 1
+    assert cursors == ['0'] * runner.ATTEMPTS + ['b' * 32]
+    output = capsys.readouterr().out
+    assert '"page_failed"' in output and '"undeliverable": 2' in output
+
+
+def test_runner_stops_at_once_when_the_window_was_missed():
+    runner = load_reminder_runner('reminder_missed_runner')
+    for reason in runner.TERMINAL_REASONS:
+        reply = runner_reply({'status': 'missed', 'reason': reason, 'failed': 0, 'cursor': '0'}, 503)
+        code, cursors, sleep = run_reminder_runner(runner, [reply])
+        assert code == 1 and cursors == ['0'] and not sleep.called
+
+
+def test_runner_waits_for_a_busy_run_and_then_finishes():
+    runner = load_reminder_runner('reminder_busy_runner')
+    replies = [runner_reply({'status': 'busy', 'cursor': '0'}, 503) for _ in range(2)]
+    replies.append(runner_reply({'status': 'completed', 'reason': 'already_completed', 'failed': 0, 'cursor': '0'}))
+    code, cursors, sleep = run_reminder_runner(runner, replies)
+    assert code == 0 and cursors == ['0'] * 3
+    assert sleep.call_args_list == [call(runner.BUSY_WAIT_SECONDS)] * 2
+
+
+def test_runner_rejects_a_failure_without_a_new_continuation():
+    runner = load_reminder_runner('reminder_stuck_runner')
+    replies = [runner_reply({'status': 'in_progress', 'failed': 0, 'cursor': '0'}) for _ in range(runner.ATTEMPTS)]
+    code, cursors, _ = run_reminder_runner(runner, replies)
+    assert code == 1 and cursors == ['0'] * runner.ATTEMPTS
+
+
+def test_vercel_crons_fit_hobby_limits_and_open_delivery_windows():
+    with open('vercel.json') as config:
+        jobs = json.load(config)['crons']
+    hours = {}
+    for job in jobs:
+        minute, hour, *rest = job['schedule'].split()
+        # Hobby accepts only daily jobs; each fires anywhere inside its hour.
+        assert minute == '0' and hour.isdigit() and rest == ['*', '*', '*']
+        hours.setdefault(job['path'], []).append(int(hour))
+    assert set(hours) == {'/api/shabbat_reminder', '/api/omer_reminder', '/api/omer_morning_reminder'}
+    for path, values in hours.items():
+        first, second = sorted(values)
+        assert second - first >= 2
+    # Israel is UTC+2 in winter and UTC+3 in summer; the whole hour must be open in both.
+    assert all(hour + 3 < delivery.SHABBAT_LAST_HOUR for hour in hours['/api/shabbat_reminder'])
+    # The owner wants the weekly Shabbat reminder around 09:00 Israel time in both seasons.
+    first = min(hours['/api/shabbat_reminder'])
+    assert first + 2 <= 9 <= first + 3
+    assert all(6 <= hour + 2 and hour + 3 < 12 for hour in hours['/api/omer_morning_reminder'])
+    from datetime import date, timezone
+    day = date(2024, 3, 1)
+    checked = 0
+    while day <= date(2030, 6, 30):
+        for hour in hours['/api/omer_reminder']:
+            for minute in (0, 59):
+                context = omer_utils.omer_event_context(datetime(day.year, day.month, day.day, hour, minute, tzinfo=timezone.utc))
+                if context['day'] is not None:
+                    checked += 1
+                    assert context['evening_eligible'], (day, hour, minute)
+        day += timedelta(days=1)
+    assert checked >= 7 * 49 * 4
+
+
+def test_backup_workflows_outlast_the_runner_budget():
+    import re
+    runner = load_reminder_runner('reminder_budget_runner')
+    for name in ('shabbat-reminder', 'omer-reminder', 'omer-morning-reminder'):
+        with open(f'.github/workflows/{name}.yml') as workflow:
+            text = workflow.read()
+        minutes = int(re.search(r'timeout-minutes: (\d+)', text).group(1))
+        assert minutes * 60 > runner.MAX_SECONDS + 300
+        assert re.search(r"cron: '([1-9][0-9]?) ", text), 'GitHub recommends avoiding the top of the hour'
+        # GitHub only delays a schedule, so a backup set after the first Vercel hour never sends first.
+        backup_hour = int(re.search(r"cron: '\d+ (\d+) ", text).group(1))
+        with open('vercel.json') as config:
+            primary = [int(job['schedule'].split()[1]) for job in json.load(config)['crons']
+                       if job['path'] == '/api/' + name.replace('-', '_')]
+        assert backup_hour > min(primary)

@@ -53,7 +53,7 @@ Vercel discovers `requirements.txt` as the deployment dependency manifest. Keep 
 
 Use `.env.example` as a names/reference guide. Do not commit `.env` or secret values. The local server does not automatically load that file; pass only the needed variables explicitly in your own environment. Use disposable Redis state and absent or dummy service secrets for development and previews.
 
-Service variable names: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `CRON_SECRET`, `REDIS_URL` (legacy fallback `KV_URL`), `WEB_APP_URL`. GitHub reminder workflows need `CRON_SECRET` and `VERCEL_URL`. Image, time, watermark and calendar configuration names are described in `.env.example`. Configure the canonical personal site origin before using bot privacy links.
+Service variable names: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `CRON_SECRET`, `REDIS_URL` (legacy fallback `KV_URL`), `WEB_APP_URL`. Vercel Cron sends `CRON_SECRET` automatically; the backup GitHub reminder workflows need `CRON_SECRET` and `VERCEL_URL`. Image, time, watermark and calendar configuration names are described in `.env.example`. Configure the canonical personal site origin before using bot privacy links.
 
 The webhook registration's `secret_token` must equal `TELEGRAM_WEBHOOK_SECRET`; reminder workflow and production `CRON_SECRET` must match. Do not print either value while comparing. Registration and command setup are explicit release operations documented in [bot setup](TELEGRAM_BOT_SETUP.md).
 
@@ -86,4 +86,4 @@ Regenerate local parsha data with `scripts/update_parsha_data.py`, inspect the d
 
 ## Operations
 
-Follow [release, backup/restore rehearsal and rollback](docs/RELEASE.md). GitHub Actions is the only intended reminder scheduler after rollout. Existing Vercel cron configuration must be retired during release. Redis holds personal data; never use production storage for local tests. Bot users can confirm `/export` or `/delete_my_data` privately; provider, Telegram, browser and recipient copies have separate lifetimes.
+Follow [release, backup/restore rehearsal and rollback](docs/RELEASE.md). Vercel Cron is the primary reminder trigger and the GitHub Actions workflows are its backup; both use the same authenticated endpoints and event progress. Redis holds personal data; never use production storage for local tests. Bot users can confirm `/export` or `/delete_my_data` privately; provider, Telegram, browser and recipient copies have separate lifetimes.
