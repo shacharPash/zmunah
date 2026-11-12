@@ -16,7 +16,6 @@ The files below are preserved pending the owner’s provenance/permission decisi
 
 | Bundled path | SHA256 | Rights status |
 | --- | --- | --- |
-| `images/image.png` | `d5256c8f47c29aaf4410ca96c586106d234e5df125ed63b4da8fb778b3a77b1d` | Unverified; owner permission required |
 | `public/favicon-16x16.png` | `b919fa9433a2677dab94ffbf5b0a812b74a2b7529c56ae6a689002ae4a0ef49f` | Unverified; owner permission required |
 | `public/watermark.png` | `2ac573b83de4c0403cb44f2434bf36e4a9d2d676369f1983be8568e1baf1afb8` | Unverified; owner permission required |
 | `public/apple-touch-icon.png` | `5ad01e505ae7fb16229f08c3140c32e413f45a92c46b0966ef3b67078e170d87` | Unverified; owner permission required |
