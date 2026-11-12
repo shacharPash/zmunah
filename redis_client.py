@@ -64,7 +64,7 @@ def get_redis_client() -> redis.Redis:
     if not redis_url:
         raise ValueError("REDIS_URL or KV_URL environment variable is not set")
 
-    _redis_client = redis.from_url(redis_url, decode_responses=True, socket_connect_timeout=3, socket_timeout=5, retry_on_timeout=False)
+    _redis_client = redis.from_url(redis_url, decode_responses=True, protocol=2, socket_connect_timeout=3, socket_timeout=5, retry_on_timeout=False)
     return _redis_client
 
 
@@ -196,7 +196,7 @@ def mark_omer_sent_today(user_id: str, date_str: str) -> None:
     client = get_redis_client()
     key = f"{OMER_SENT_KEY_PREFIX}{date_str}:{user_id}"
     # Set with 48-hour expiration to auto-cleanup old keys
-    client.setex(key, 48 * 60 * 60, "1")
+    client.set(key, "1", ex=48 * 60 * 60)
 
 
 def was_omer_sent_today(user_id: str, date_str: str) -> bool:
@@ -230,7 +230,7 @@ def mark_omer_counted(user_id: str, omer_day: int | str) -> None:
     client = get_redis_client()
     key = f"{OMER_COUNTED_KEY_PREFIX}{user_id}:{omer_day}"
     # Set with 48-hour expiration to auto-cleanup old keys
-    client.setex(key, 48 * 60 * 60, "1")
+    client.set(key, "1", ex=48 * 60 * 60)
 
 
 def was_omer_counted(user_id: str, omer_day: int | str) -> bool:
