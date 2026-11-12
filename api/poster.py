@@ -17,7 +17,7 @@ from media_validation import (
 
 from make_shabbat_posts import generate_poster, DEFAULT_CITIES
 from cities import get_cities_list, build_city_lookup, map_city_payload
-from rate_limiter import RateLimiter, RateLimitUnavailable
+from rate_limiter import RateLimiter, RateLimitUnavailable, budget_from_env, measure_render, render_budget_available
 
 # Load cities once at module level (cached internally)
 GEOJSON_CITIES = get_cities_list()
@@ -25,6 +25,9 @@ CITY_BY_NAME = build_city_lookup(GEOJSON_CITIES)
 
 # Rate limiter: 10 requests per minute per IP
 _rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
+
+WEB_RENDER_CPU_MS_PER_DAY = budget_from_env("POSTER_WEB_CPU_SECONDS_PER_DAY", 120) * 1000
+WEB_BUDGET_MESSAGE = "הגענו למכסת הפוסטרים היומית באתר. אפשר לנסות שוב מחר או להשתמש בבוט בטלגרם."
 
 
 def _detect_image_suffix(image_data: bytes) -> str:
@@ -255,6 +258,14 @@ class handler(BaseHTTPRequestHandler):
             return
 
         try:
+            if not render_budget_available("web", WEB_RENDER_CPU_MS_PER_DAY):
+                self._send_error(503, WEB_BUDGET_MESSAGE)
+                return
+        except RateLimitUnavailable:
+            self._send_error(503, "Service unavailable. Try again later.")
+            return
+
+        try:
             content_length = validate_content_length(self.headers.get("Content-Length"))
             if self.headers.get("Transfer-Encoding"):
                 raise InputError()
@@ -265,7 +276,8 @@ class handler(BaseHTTPRequestHandler):
 
             # Generate poster
             metadata = {}
-            poster_bytes = build_poster_from_payload(payload, metadata=metadata)
+            with measure_render("web"):
+                poster_bytes = build_poster_from_payload(payload, metadata=metadata)
             validate_response_size(poster_bytes)
 
             # Detect output format from magic bytes

@@ -21,24 +21,55 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
-from redis_client import DONE_TTL, get_pending_deletion, consume_update_budget, preference_operation, update_user_prefs, mutate_user_prefs, acquire_claim, release_claim, complete_claim, claim_completed, export_user_data, delete_user_data, get_redis_client, get_user_prefs, set_user_prefs, DEFAULT_PREFERENCES, mark_omer_counted, was_omer_counted
+from redis_client import DONE_TTL, get_pending_deletion, consume_render_quota, consume_update_budget, preference_operation, update_user_prefs, mutate_user_prefs, acquire_claim, release_claim, complete_claim, claim_completed, export_user_data, delete_user_data, get_redis_client, get_user_prefs, set_user_prefs, DEFAULT_PREFERENCES, mark_omer_counted, was_omer_counted
 from api import poster as poster_api
 from media_validation import MAX_POSTER_TEXT_LENGTH, MAX_POSTER_CITIES
+from rate_limiter import budget_from_env, measure_render, render_budget_available
 from cities import build_city_lookup, get_cities_list, SPECIAL_OFFSET_CITIES, DEFAULT_CANDLE_OFFSET
 from omer_utils import is_omer_period, get_omer_day, get_omer_info_for_time, ISRAEL_TZ, omer_event_context
 
 _request_time = ContextVar('bot_request_time', default=None)
+_render_actor = ContextVar('bot_render_actor', default=None)
+BOT_RENDER_CPU_MS_PER_DAY = budget_from_env('POSTER_BOT_CPU_SECONDS_PER_DAY', 120) * 1000
+BOT_USER_RENDERS_PER_HOUR = budget_from_env('POSTER_BOT_USER_RENDERS_PER_HOUR', 20)
+POSTER_BUDGET_MESSAGE = 'הגעת למכסת הפוסטרים כרגע. אפשר לנסות שוב בעוד שעה. ההגדרות הקיימות נשמרו.'
+POSTER_DAILY_BUDGET_MESSAGE = 'הבוט הגיע למכסת הפוסטרים היומית. אפשר לנסות שוב מחר. תזכורות שהפעלת ממשיכות להישלח כרגיל.'
 POSTER_CORRECTION_MESSAGE = f'לא ניתן ליצור פוסטר מהנתונים האלה. פתח את /settings ובדוק שיש עד {MAX_POSTER_CITIES} ערים ועד {MAX_POSTER_TEXT_LENGTH} תווים בכל טקסט. בדוק גם שהתמונה נתמכת. ההגדרות הקיימות נשמרו.'
 
 
+class PosterBudgetExceeded(ValueError):
+    """An interactive render would exceed the actor's hourly render quota."""
+
+
+class DailyPosterBudgetExceeded(PosterBudgetExceeded):
+    """The bot's shared daily render budget is exhausted until the next UTC day."""
+
+
+def _poster_failure_text(error):
+    if isinstance(error, DailyPosterBudgetExceeded):
+        return POSTER_DAILY_BUDGET_MESSAGE
+    return POSTER_BUDGET_MESSAGE if isinstance(error, PosterBudgetExceeded) else POSTER_CORRECTION_MESSAGE
+
+
 def build_poster_from_payload(payload):
-    """Use the request's single Omer context, then delegate to the safe builder."""
+    """Use the request's single Omer context, then delegate to the safe builder.
+
+    Renders for an interactive update are budgeted; scheduled reminders are not.
+    """
     if payload.get('omerMode'):
         context = omer_event_context(_request_time.get())
         if context['day'] is None:
             raise ValueError('outside Omer period')
         payload = {**payload, 'omerDay': context['day'], 'omerDate': context['date'].isoformat()}
-    return poster_api.build_poster_from_payload(payload)
+    actor = _render_actor.get()
+    if actor is None:
+        return poster_api.build_poster_from_payload(payload)
+    if not render_budget_available('bot', BOT_RENDER_CPU_MS_PER_DAY):
+        raise DailyPosterBudgetExceeded('bot render budget exhausted')
+    if not consume_render_quota(actor, BOT_USER_RENDERS_PER_HOUR):
+        raise PosterBudgetExceeded('user render quota exhausted')
+    with measure_render('bot'):
+        return poster_api.build_poster_from_payload(payload)
 
 
 # Load city lookup and list once at module level
@@ -964,8 +995,8 @@ def handle_poster(update: Dict[str, Any], force_omer: bool = False) -> None:
             keyboard = _build_shabbat_poster_keyboard()
             send_photo_with_keyboard(chat_id, poster_bytes, caption, keyboard)
 
-    except ValueError:
-        send_message(chat_id, POSTER_CORRECTION_MESSAGE)
+    except ValueError as error:
+        send_message(chat_id, _poster_failure_text(error))
 
 
 def handle_omer(update: Dict[str, Any]) -> None:
@@ -1580,8 +1611,8 @@ def handle_start_poster_shabbat(chat_id: int, user_id: str) -> None:
         keyboard = _build_shabbat_poster_keyboard()
         send_photo_with_keyboard(chat_id, poster_bytes, "🕯️ הפוסטר שלך מוכן! שבת שלום!", keyboard)
 
-    except ValueError:
-        send_message(chat_id, POSTER_CORRECTION_MESSAGE)
+    except ValueError as error:
+        send_message(chat_id, _poster_failure_text(error))
 
 
 def handle_start_poster_omer(chat_id: int, user_id: str) -> None:
@@ -1618,8 +1649,8 @@ def handle_start_poster_omer(chat_id: int, user_id: str) -> None:
         keyboard = _build_omer_poster_keyboard()
         send_photo_with_keyboard(chat_id, poster_bytes, "🔢 פוסטר ספירת העומר שלך מוכן!", keyboard)
 
-    except ValueError:
-        send_message(chat_id, POSTER_CORRECTION_MESSAGE)
+    except ValueError as error:
+        send_message(chat_id, _poster_failure_text(error))
 
 
 def handle_preview_shabbat(chat_id: int, user_id: str) -> None:
@@ -1657,8 +1688,8 @@ def handle_preview_shabbat(chat_id: int, user_id: str) -> None:
         poster_bytes = build_poster_from_payload(payload)
         send_photo(chat_id, poster_bytes, "👆 כך ייראה פוסטר השבת שלך עם ההגדרות הנוכחיות")
 
-    except ValueError:
-        send_message(chat_id, POSTER_CORRECTION_MESSAGE)
+    except ValueError as error:
+        send_message(chat_id, _poster_failure_text(error))
 
 
 def handle_preview_omer(chat_id: int, user_id: str) -> None:
@@ -1698,8 +1729,8 @@ def handle_preview_omer(chat_id: int, user_id: str) -> None:
         poster_bytes = build_poster_from_payload(payload)
         send_photo(chat_id, poster_bytes, "👆 כך ייראה פוסטר העומר שלך עם ההגדרות הנוכחיות")
 
-    except ValueError:
-        send_message(chat_id, POSTER_CORRECTION_MESSAGE)
+    except ValueError as error:
+        send_message(chat_id, _poster_failure_text(error))
 
 
 def handle_show_saved_image(chat_id: int, user_id: str) -> None:
@@ -2282,8 +2313,8 @@ def handle_start_poster(chat_id: int, user_id: str) -> None:
             keyboard = _build_shabbat_poster_keyboard()
             send_photo_with_keyboard(chat_id, poster_bytes, caption, keyboard)
 
-    except ValueError:
-        send_message(chat_id, POSTER_CORRECTION_MESSAGE)
+    except ValueError as error:
+        send_message(chat_id, _poster_failure_text(error))
 
 
 def handle_start_omer_settings(chat_id: int, user_id: str) -> None:
@@ -2368,8 +2399,8 @@ def handle_start_omer_poster(chat_id: int, user_id: str) -> None:
         keyboard = _build_omer_poster_keyboard()
         send_photo_with_keyboard(chat_id, poster_bytes, "🔢 פוסטר ספירת העומר שלך מוכן!", keyboard)
 
-    except ValueError:
-        send_message(chat_id, POSTER_CORRECTION_MESSAGE)
+    except ValueError as error:
+        send_message(chat_id, _poster_failure_text(error))
 
 
 def handle_back_to_start(chat_id: int, user_id: str) -> None:
@@ -2487,8 +2518,8 @@ def handle_show_preview(chat_id: int, user_id: str) -> None:
         else:
             caption = "👆 כך ייראה הפוסטר שלך עם ההגדרות הנוכחיות"
         send_photo(chat_id, poster_bytes, caption)
-    except ValueError:
-        send_message(chat_id, POSTER_CORRECTION_MESSAGE)
+    except ValueError as error:
+        send_message(chat_id, _poster_failure_text(error))
 
 
 def handle_text_message(update: Dict[str, Any]) -> None:
@@ -2635,10 +2666,12 @@ def process_update(update: Dict[str, Any]) -> None:
             if not consume_update_budget(user_id, key + ':budget'):
                 raise UpdateRateLimited('update quota exceeded')
             time_token = _request_time.set(datetime.now(ISRAEL_TZ))
+            actor_token = _render_actor.set(user_id)
             try:
                 with nullcontext() if private_flow else preference_operation(user_id, update["update_id"]):
                     cleanup_keys = _route_update(update) or ()
             finally:
+                _render_actor.reset(actor_token)
                 _request_time.reset(time_token)
             if not complete_claim(key, token, success_key=success_key, cleanup_keys=cleanup_keys):
                 raise RuntimeError('update lease expired')

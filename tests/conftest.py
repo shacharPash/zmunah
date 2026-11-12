@@ -35,9 +35,12 @@ def offline_boundaries(monkeypatch):
 @pytest.fixture(autouse=True)
 def isolated_calendar_cache():
     import hebcal_api
+    from api import upcoming_events
     hebcal_api.clear_hebcal_cache()
+    upcoming_events._events_cache.clear()
     yield
     hebcal_api.clear_hebcal_cache()
+    upcoming_events._events_cache.clear()
 
 # Ensure parent directory is in path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

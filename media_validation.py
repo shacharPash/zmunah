@@ -18,6 +18,8 @@ MAX_SOURCE_PIXELS = 20_000_000
 MAX_SOURCE_DIMENSION = 12_000
 MAX_GIF_FRAMES = 30
 MAX_GIF_PIXELS = 40_000_000
+MIN_POSTER_YEAR = 2020
+MAX_POSTER_YEARS_AHEAD = 3
 
 
 class InputError(ValueError):
@@ -105,9 +107,11 @@ def validate_payload(payload, *, allow_local_image=False):
             if not isinstance(value, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", value):
                 raise InputError()
             try:
-                date.fromisoformat(value)
+                parsed = date.fromisoformat(value)
             except ValueError:
                 raise InputError() from None
+            if not MIN_POSTER_YEAR <= parsed.year <= date.today().year + MAX_POSTER_YEARS_AHEAD:
+                raise InputError()
     for name in ("imageBase64", "image"):
         if payload.get(name) is not None and not isinstance(payload[name], str):
             raise InputError()
