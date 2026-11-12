@@ -367,10 +367,12 @@ def export_user_data(user_id: str) -> dict:
     return result
 
 
-REMINDER_PAGE_TTL = 3600
+REMINDER_PAGE_SIZE = 10
+REMINDER_PAGE_TTL = EVENT_TTL
 REMINDER_ROOT_TTL = EVENT_TTL
 MAX_SCAN_CANDIDATES = 1000
 REMINDER_PAGE_PREFIX = 'zmunah:reminder_page:'
+REMINDER_PROGRESS_PREFIX = 'zmunah:reminder_progress:'
 SNAPSHOT_LOCK_KEY = 'zmunah:reminder_snapshot_lock'
 
 
@@ -401,7 +403,7 @@ def _read_reminder_page(token, scope=None):
         if set(page) != {'scope', 'scan'} or not re.fullmatch(r'[0-9]{1,20}', str(page['scan'])):
             raise ValueError('invalid reminder page')
     else:
-        if set(page) != {'scope', 'users', 'next'} or not isinstance(page['users'], list) or len(page['users']) > 2:
+        if set(page) != {'scope', 'users', 'next'} or not isinstance(page['users'], list) or len(page['users']) > REMINDER_PAGE_SIZE:
             raise ValueError('invalid reminder page')
         if any(not isinstance(uid, str) or not re.fullmatch(r'[0-9]{1,20}', uid) for uid in page['users']):
             raise ValueError('invalid reminder page')
@@ -418,7 +420,7 @@ def _expand_reminder_page(token, page):
         raise ValueError('reminder scan page exceeds limit')
     users = sorted({key[len(USER_PREFS_KEY_PREFIX):] for key in keys
                     if re.fullmatch(r'zmunah:user:[0-9]{1,20}', key)})
-    groups = [users[i:i + 2] for i in range(0, len(users), 2)] or [[]]
+    groups = [users[i:i + REMINDER_PAGE_SIZE] for i in range(0, len(users), REMINDER_PAGE_SIZE)] or [[]]
     tokens = [token] + [secrets.token_hex(16) for _ in groups[1:]]
     continuation = secrets.token_hex(16) if cursor else '0'
     records = []
@@ -458,13 +460,13 @@ def delete_user_data(user_id: str, preserve_keys=()) -> None:
         _remove_user_from_reminder_pages(str(user_id))
 
 
-def reminder_user_batch(field: str, cursor: str = '0', limit: int = 2, *, scope: str | None = None) -> tuple[list[str], str]:
-    """Read a stable two-candidate page; retries preserve exact recipient identity.
+def reminder_user_batch(field: str, cursor: str = '0', limit: int = REMINDER_PAGE_SIZE, *, scope: str | None = None) -> tuple[list[str], str]:
+    """Read a stable bounded candidate page; retries preserve exact recipient identity.
 
     Zero selects the existing event root or initializes it. Other cursors are
     opaque saved-page tokens. Expired/missing saved pages fail closed.
     """
-    if field not in ('reminder_enabled', 'shabbat_reminder_enabled') or limit != 2:
+    if field not in ('reminder_enabled', 'shabbat_reminder_enabled') or limit != REMINDER_PAGE_SIZE:
         raise ValueError('invalid reminder batch configuration')
     scope = scope or field + ':' + date.today().isoformat()
     if not re.fullmatch(r'[a-z_]+:[0-9-]{10}', scope):
@@ -495,6 +497,47 @@ def reminder_user_batch(field: str, cursor: str = '0', limit: int = 2, *, scope:
     # The global page lock has been released before any user lock can be taken.
     users = [uid for uid in candidates if get_user_prefs(uid).get(field) is True]
     return users, continuation
+
+
+KEEPALIVE_KEY = 'zmunah:keepalive'
+KEEPALIVE_TTL = 30 * 24 * 60 * 60
+
+
+def touch_keepalive() -> None:
+    """Write once per scheduled call: free Redis Cloud deletes databases idle for about 14 days."""
+    get_redis_client().set(KEEPALIVE_KEY, date.today().isoformat(), ex=KEEPALIVE_TTL)
+
+
+def _reminder_progress_key(scope):
+    if not isinstance(scope, str) or not re.fullmatch(r'[a-z_]+:[0-9-]{10}', scope):
+        raise ValueError('invalid reminder scope')
+    return REMINDER_PROGRESS_PREFIX + scope
+
+
+def get_reminder_progress(scope: str) -> tuple[str | None, dict]:
+    """Return the raw stored record and the first page not yet fully delivered.
+
+    The cursor is '0' before the first page, a saved page token, or 'done'.
+    """
+    raw = get_redis_client().get(_reminder_progress_key(scope))
+    if raw is None:
+        return None, {'cursor': '0'}
+    progress = json.loads(raw) if len(raw) <= 256 else None
+    if (not isinstance(progress, dict) or set(progress) != {'cursor'} or not isinstance(progress['cursor'], str)
+            or not re.fullmatch(r'0|done|[0-9a-f]{32}', progress['cursor'])):
+        raise ValueError('invalid reminder progress')
+    return raw, progress
+
+
+def set_reminder_progress(scope: str, expected: str | None, progress: dict) -> tuple[bool, str]:
+    """Replace the record only if it still equals the raw value that was read."""
+    value = json.dumps(progress, sort_keys=True, separators=(',', ':'))
+    replaced = get_redis_client().eval(
+        "local current = redis.call('GET', KEYS[1]) "
+        "if (current == false and ARGV[1] == '') or current == ARGV[1] then "
+        "redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3]) return 1 end return 0",
+        1, _reminder_progress_key(scope), expected or '', value, EVENT_TTL)
+    return bool(replaced), value
 
 
 def get_pending_deletion(user_id):

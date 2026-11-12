@@ -1,4 +1,4 @@
-"""Authenticated GitHub Actions reminder endpoint. Targeted calls retain all guards."""
+"""Authenticated reminder endpoint for Vercel Cron and the GitHub Actions backup. Targeted calls retain all guards."""
 
 import base64
 import os
@@ -14,7 +14,7 @@ from reminder_delivery import run_reminders
 from jewcal import JewCal
 from omer_utils import ISRAEL_TZ
 from redis_client import get_user_prefs
-from telegram_bot import send_photo_with_keyboard, download_photo, CITY_BY_NAME, _build_shabbat_poster_keyboard
+from telegram_bot import TelegramDeliveryError, send_photo_with_keyboard, download_photo, CITY_BY_NAME, _build_shabbat_poster_keyboard
 from api.poster import build_poster_from_payload
 
 # Vercel cron secret for authentication
@@ -54,6 +54,10 @@ def send_shabbat_reminder(user_id: str, context: dict | None = None) -> bool:
 
     Returns:
         bool: True if sent successfully, False otherwise
+
+    Raises:
+        TelegramDeliveryError: Telegram refused a request, so the caller can
+            tell a blocked recipient or a rate limit from other failures.
     """
     try:
         # Get user preferences
@@ -107,6 +111,8 @@ def send_shabbat_reminder(user_id: str, context: dict | None = None) -> bool:
 
         return result.get("ok", False)
 
+    except TelegramDeliveryError:
+        raise
     except Exception:
         return False
 

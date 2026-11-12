@@ -1,4 +1,4 @@
-"""Authenticated GitHub Actions reminder endpoint. Targeted calls retain all guards."""
+"""Authenticated reminder endpoint for Vercel Cron and the GitHub Actions backup. Targeted calls retain all guards."""
 
 import os
 import sys
@@ -11,7 +11,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from reminder_delivery import run_reminders
 
 from omer_utils import get_omer_day, ISRAEL_TZ, omer_event_context
-from telegram_bot import send_message
+from telegram_bot import TelegramDeliveryError, send_message
 
 # Vercel cron secret for authentication
 CRON_SECRET = os.environ.get("CRON_SECRET")
@@ -40,6 +40,10 @@ def send_morning_reminder(user_id: str, context: dict) -> bool:
         
     Returns:
         bool: True if sent successfully, False otherwise
+
+    Raises:
+        TelegramDeliveryError: Telegram refused a request, so the caller can
+            tell a blocked recipient or a rate limit from other failures.
     """
     try:
         omer_day = context["day"]
@@ -50,7 +54,9 @@ def send_morning_reminder(user_id: str, context: dict) -> bool:
         
         result = send_message(chat_id, message)
         return result.get("ok", False)
-        
+
+    except TelegramDeliveryError:
+        raise
     except Exception:
         return False
 
