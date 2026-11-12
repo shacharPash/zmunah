@@ -1,6 +1,6 @@
 # Security and private reports
 
-Maintainer: [personal GitHub profile](https://github.com/shacharPash). A direct private reporting channel is a release prerequisite and has not yet been selected. Do not put vulnerabilities, secrets, user identifiers, images or exported data in public issues. General contact can use the profile; request a private channel before providing details. No guaranteed response time is promised for this personal beta.
+Maintainer: [personal GitHub profile](https://github.com/shacharPash). Report vulnerabilities privately through [GitHub private vulnerability reporting](https://github.com/shacharPash/zmunah/security/advisories/new) for this repository. Do not put vulnerabilities, secrets, user identifiers, images or exported data in public issues. General questions and bug reports can go to [issues](https://github.com/shacharPash/zmunah/issues). No guaranteed response time is promised for this personal beta.
 
 ## Boundaries
 
@@ -10,6 +10,6 @@ Keep production credentials out of local tests and previews. Use a disposable Re
 
 ## Incident response
 
-Pause the single reminder scheduler if deliveries or data integrity are affected. Restrict public access when needed, preserve minimal access-controlled evidence without copying user content into tickets, and revoke or rotate the affected credential through its provider. Updating webhook secrets also requires updating webhook registration. Coordinate any notification through the confirmed private contact channel and applicable provider process. Restore only into isolated state first; account for deletion requests since a backup and do not automatically replay old opt-ins. See [the operations guide](docs/RELEASE.md).
+Pause the single reminder scheduler if deliveries or data integrity are affected. Restrict public access when needed, preserve minimal access-controlled evidence without copying user content into tickets, and revoke or rotate the affected credential through its provider. Updating webhook secrets also requires updating webhook registration. Coordinate any notification through the private vulnerability report and applicable provider process. Restore only into isolated state first; account for deletion requests since a backup and do not automatically replay old opt-ins. See [the operations guide](docs/RELEASE.md).
 
 Local automated validation is not a certification of security or legal compliance.
