@@ -28,6 +28,7 @@ The files below are preserved pending the owner’s provenance/permission decisi
 | `public/backgrounds/omer_default.png` | `5bfe85529ed3452df362f60fc856b94f085c956f8180818bea3e611b01e25707` | Unverified; owner permission required |
 | `public/backgrounds/shabat_default.png` | `727ebd63e4c46e3b40963289bc2c5a2990a4143f6ee3252919d29294216c6135` | Unverified; owner permission required |
 | `public/favicon.ico` | `1fecee2324c19123cf636710ae8e1770ac31d5db8fd7d1e9fac36df4c8c447fe` | Unverified; owner permission required |
+| `docs/images/example-poster.jpg` | `b19208d5037c7b8b6b3becc2ce83ce9e3e865bef6dc438e4a9700bbf23d6d59c` | README example rendered from `api/shabat_default.png` and `api/watermark.png`; same unverified status |
 
 The provenance/license of `cities_coordinates.geojson` also needs verification before redistribution. `cities.py`, local calendar helpers and translation code are subject to the owner’s code-license choice; generated Hebcal data retains its separate attribution.
 
