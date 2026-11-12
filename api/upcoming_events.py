@@ -5,6 +5,7 @@ Vercel serverless function for getting upcoming Shabbat/holiday events.
 import json
 import os
 import sys
+import time
 from datetime import timedelta
 from dateutil.relativedelta import relativedelta
 from http.server import BaseHTTPRequestHandler
@@ -14,15 +15,19 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from make_shabbat_posts import find_next_sequence
 from calendar_utils import get_effective_start_date
-from hebcal_api import get_parsha_from_hebcal, hebcal_request_sequence
+from hebcal_api import get_parsha_from_hebcal, has_recent_failure, hebcal_request_sequence
 from translations import translate_yomtov
 
 
+EVENTS_CACHE_SECONDS = 3600
+_events_cache = {}
+
+
 @hebcal_request_sequence()
-def get_upcoming_events():
+def get_upcoming_events(start_date=None):
     """Get upcoming Shabbat/holiday events for one year ahead."""
     events = []
-    current_date = get_effective_start_date()
+    current_date = start_date or get_effective_start_date()
     # Calculate end date as one year from today
     one_year_ahead = current_date + relativedelta(years=1)
 
@@ -70,12 +75,26 @@ def get_upcoming_events():
     return events
 
 
+def get_cached_upcoming_events():
+    """Reuse this instance's list until the effective start date rolls over at havdalah."""
+    start_date = get_effective_start_date()
+    cached = _events_cache.get(start_date)
+    now = time.monotonic()
+    if cached is not None and cached[0] > now:
+        return cached[1]
+    events = get_upcoming_events(start_date)
+    _events_cache.clear()
+    if not has_recent_failure():
+        _events_cache[start_date] = (now + EVENTS_CACHE_SECONDS, events)
+    return events
+
+
 class handler(BaseHTTPRequestHandler):
     """Vercel serverless function entrypoint for upcoming events."""
 
     def do_GET(self):
         try:
-            events = get_upcoming_events()
+            events = get_cached_upcoming_events()
 
             self.send_response(200)
             self.send_header("Content-Type", "application/json; charset=utf-8")

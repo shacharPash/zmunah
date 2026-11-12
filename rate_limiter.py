@@ -5,10 +5,12 @@ Missing configuration permits secret-free local use. Configured Redis failures
 raise RateLimitUnavailable so the public adapter can decline rendering.
 """
 
+import json
 import os
 import time
+from contextlib import contextmanager
 from threading import Lock
-from typing import Tuple
+from typing import Iterator, Tuple
 
 # Store at most this many active identifier/window pairs per process. Never evict
 # an active quota to admit a new identifier, which would let churn reset limits.
@@ -175,3 +177,51 @@ class RateLimiter:
             except Exception:
                 pass
 
+
+
+RENDER_BUDGET_TTL = 2 * 24 * 60 * 60
+
+
+def budget_from_env(name: str, default: int) -> int:
+    """Read a positive integer budget, keeping the default for absent or invalid values."""
+    try:
+        value = int(os.getenv(name, ""))
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
+
+def _render_budget_key(pool: str) -> str:
+    return f"zmunah:render_cpu:{pool}:{time.strftime('%Y%m%d', time.gmtime())}"
+
+
+def render_budget_available(pool: str, daily_cpu_ms: int) -> bool:
+    """True while the pool's measured render CPU for the UTC day is under its cap."""
+    client = _get_redis_client()
+    if client is None:
+        return True
+    try:
+        spent = client.get(_render_budget_key(pool))
+    except Exception:
+        raise RateLimitUnavailable("Rate limit unavailable") from None
+    return int(spent or 0) < daily_cpu_ms
+
+
+@contextmanager
+def measure_render(pool: str) -> Iterator[None]:
+    """Charge the CPU time of one render, successful or not, to the pool's daily budget."""
+    started = time.thread_time()
+    try:
+        yield
+    finally:
+        cost_ms = max(1, int((time.thread_time() - started) * 1000))
+        try:
+            client = _get_redis_client()
+            if client is not None:
+                key = _render_budget_key(pool)
+                pipe = client.pipeline()
+                pipe.incrby(key, cost_ms)
+                pipe.expire(key, RENDER_BUDGET_TTL)
+                pipe.execute()
+        except Exception:
+            print(json.dumps({"event": "render_budget", "pool": pool, "record_failed": 1}))

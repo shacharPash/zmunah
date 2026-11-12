@@ -111,6 +111,12 @@ def _get_hebcal_data_for_year(year: int) -> Optional[Dict[str, Any]]:
     return data
 
 
+def has_recent_failure() -> bool:
+    """True while any year's fetch failure is still inside its retry delay."""
+    now = time.monotonic()
+    return any(expiry > now for expiry in _failure_cache.values())
+
+
 def clear_hebcal_cache() -> None:
     """Clear the Hebcal API cache. Useful for testing or memory management."""
     _hebcal_cache.clear()

@@ -44,6 +44,7 @@ class handler(BaseHTTPRequestHandler):
 
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=86400")
             self.end_headers()
             self.wfile.write(html_content.encode("utf-8"))
         except Exception as e:

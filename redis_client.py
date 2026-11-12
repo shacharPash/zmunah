@@ -507,6 +507,18 @@ def get_pending_deletion(user_id):
     return pending
 
 
+def consume_render_quota(user_id: str, limit: int, window: int = 3600) -> bool:
+    """Count one interactive poster render against its actor's fixed window."""
+    key = f'zmunah:delivery:{user_id}:render:rate'
+    return bool(get_redis_client().eval(
+        "local current = tonumber(redis.call('GET', KEYS[1]) or '0'); "
+        "if current >= tonumber(ARGV[1]) then return 0 end "
+        "local count = redis.call('INCR', KEYS[1]); "
+        "if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[2]) end "
+        "return 1",
+        1, key, limit, window))
+
+
 def consume_update_budget(user_id: str, receipt_key: str, limit: int = 30, window: int = 60) -> bool:
     """Count each authenticated update once against its actor's fixed window."""
     key = f'zmunah:delivery:{user_id}:rate'
