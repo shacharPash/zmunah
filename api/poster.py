@@ -1,3 +1,4 @@
+import ipaddress
 import json
 import os
 import sys
@@ -28,6 +29,19 @@ _rate_limiter = RateLimiter(max_requests=10, window_seconds=60)
 
 WEB_RENDER_CPU_MS_PER_DAY = budget_from_env("POSTER_WEB_CPU_SECONDS_PER_DAY", 120) * 1000
 WEB_BUDGET_MESSAGE = "הגענו למכסת הפוסטרים היומית באתר. אפשר לנסות שוב מחר או להשתמש בבוט בטלגרם."
+
+
+def _rate_limit_identity(address: str) -> str:
+    """Count an IPv6 client by its /64 network, which one subscriber typically controls."""
+    try:
+        parsed = ipaddress.ip_address(address)
+    except ValueError:
+        return address
+    if parsed.version == 6:
+        if parsed.ipv4_mapped is not None:
+            return str(parsed.ipv4_mapped)
+        return str(ipaddress.ip_network(f"{parsed}/64", strict=False))
+    return str(parsed)
 
 
 def _detect_image_suffix(image_data: bytes) -> str:
@@ -225,15 +239,15 @@ class handler(BaseHTTPRequestHandler):
         forwarded_for = self.headers.get("X-Forwarded-For")
         if forwarded_for:
             # Take the first IP in the chain (original client)
-            return forwarded_for.split(",")[0].strip()
+            return _rate_limit_identity(forwarded_for.split(",")[0].strip())
 
         # Check X-Real-IP header
         real_ip = self.headers.get("X-Real-IP")
         if real_ip:
-            return real_ip.strip()
+            return _rate_limit_identity(real_ip.strip())
 
         # Fall back to client address
-        return self.client_address[0] if self.client_address else "unknown"
+        return _rate_limit_identity(self.client_address[0]) if self.client_address else "unknown"
 
     def do_POST(self):
         """Handle POST request to generate a poster."""

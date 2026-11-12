@@ -86,3 +86,13 @@ def test_local_capacity_does_not_evict_active_quota_and_reclaims_expired(monkeyp
     monkeypatch.setattr(limits.time, 'time', lambda: 1060)
     assert invoke('203.0.113.3')[0] == 200
     assert len(limits._memory_store) == 1
+
+
+def test_ipv6_clients_share_their_slash_64_quota(monkeypatch):
+    monkeypatch.delenv('REDIS_URL', raising=False)
+    monkeypatch.delenv('KV_URL', raising=False)
+    monkeypatch.setattr(poster, 'build_poster_from_payload', lambda payload, metadata=None: b'\x89PNG')
+    statuses = [invoke(f'2001:db8:1:2::{i:x}')[0] for i in range(1, 12)]
+    assert statuses[:10] == [200] * 10
+    assert statuses[10] == 429
+    assert invoke('2001:db8:1:3::1')[0] == 200
