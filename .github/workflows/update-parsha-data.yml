@@ -13,8 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version-file: .python-version
       - name: Install locked runtime
@@ -22,7 +22,7 @@ jobs:
       - name: Validate all years and replace fallback atomically
         run: python scripts/update_parsha_data.py
       - name: Upload validated data for a reviewed change
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: validated-israel-parsha-data
           path: parsha_data.json
