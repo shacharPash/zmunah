@@ -1312,6 +1312,9 @@ def test_vercel_crons_fit_hobby_limits_and_open_delivery_windows():
         assert second - first >= 2
     # Israel is UTC+2 in winter and UTC+3 in summer; the whole hour must be open in both.
     assert all(hour + 3 < delivery.SHABBAT_LAST_HOUR for hour in hours['/api/shabbat_reminder'])
+    # The owner wants the weekly Shabbat reminder around 09:00 Israel time in both seasons.
+    first = min(hours['/api/shabbat_reminder'])
+    assert first + 2 <= 9 <= first + 3
     assert all(6 <= hour + 2 and hour + 3 < 12 for hour in hours['/api/omer_morning_reminder'])
     from datetime import date, timezone
     day = date(2024, 3, 1)
@@ -1336,3 +1339,9 @@ def test_backup_workflows_outlast_the_runner_budget():
         minutes = int(re.search(r'timeout-minutes: (\d+)', text).group(1))
         assert minutes * 60 > runner.MAX_SECONDS + 300
         assert re.search(r"cron: '([1-9][0-9]?) ", text), 'GitHub recommends avoiding the top of the hour'
+        # GitHub only delays a schedule, so a backup set after the first Vercel hour never sends first.
+        backup_hour = int(re.search(r"cron: '\d+ (\d+) ", text).group(1))
+        with open('vercel.json') as config:
+            primary = [int(job['schedule'].split()[1]) for job in json.load(config)['crons']
+                       if job['path'] == '/api/' + name.replace('-', '_')]
+        assert backup_hour > min(primary)

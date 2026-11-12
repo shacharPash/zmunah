@@ -28,11 +28,11 @@
   "crons": [
     {
       "path": "/api/shabbat_reminder",
-      "schedule": "0 4 * * *"
+      "schedule": "0 6 * * *"
     },
     {
       "path": "/api/shabbat_reminder",
-      "schedule": "0 7 * * *"
+      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/omer_reminder",

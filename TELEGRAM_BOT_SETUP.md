@@ -122,16 +122,18 @@ once a day at any minute inside its scheduled hour, and Vercel does not retry a
 failed invocation, so every reminder has two jobs at least two hours apart. The
 GitHub Actions workflows remain as a backup and as the failure alert: GitHub
 delays scheduled runs by hours, and a run that finds the window already passed
-reports it instead of sending late. GitHub also disables scheduled workflows in a
-public repository after 60 days without repository activity, so it cannot be the
-only trigger. Every authenticated scheduled call, including days with nothing to
+reports it instead of sending late. It cannot be the only trigger either: in a
+private repository its runs use the account's included Actions minutes and stop
+when they run out, and in a public repository GitHub disables scheduled workflows
+after 60 days without repository activity. Vercel Cron does not depend on the
+repository's visibility. Every authenticated scheduled call, including days with nothing to
 send, writes `zmunah:keepalive` (the date, 30 days), because a free Redis Cloud
 database is deleted after about 14 days without read or write commands. The
 daily schedules in UTC are:
 
 | Reminder | Vercel Cron (UTC hour) | GitHub backup (UTC) | Israel local time of the Vercel jobs |
 | --- | --- | --- | --- |
-| Shabbat/holiday eve check | 04:00, 07:00 | 05:17 | 06:00 and 09:00 winter, 07:00 and 10:00 summer |
+| Shabbat/holiday eve check | 06:00, 08:00 | 07:17 | 08:00 and 10:00 winter, 09:00 and 11:00 summer |
 | Omer evening | 18:00, 20:00 | 19:17 | 20:00 and 22:00 winter, 21:00 and 23:00 summer |
 | Omer morning | 06:00, 08:00 | 07:17 | 08:00 and 10:00 winter, 09:00 and 11:00 summer |
 
