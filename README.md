@@ -1,12 +1,32 @@
-# Zmunah: personal Shabbat and Omer posters
+# Zmunah (זְמוּנָה): Shabbat and holiday posters with candle-lighting times
 
-A personal Hebrew poster generator maintained by [shacharPash](https://github.com/shacharPash). Python renders uploaded images and text; the browser downloads or shares the result. The private Telegram bot stores preferences in Redis and sends opted-in reminders. There is no AI service or automatic social publishing.
+Zmunah turns a photo into a Hebrew Shabbat or holiday poster that lists candle-lighting and havdalah times for the cities you pick, ready to download or share on WhatsApp. The name joins the Hebrew words for time (זמן) and picture (תמונה).
 
-## Current release scope
+**Try it:** [shabat-posts.vercel.app](https://shabat-posts.vercel.app) (Hebrew, works on mobile, no sign-up).
 
-Israel parsha readings, with validated local fallback data for 2024-2040. Omer event identity and reminders use Asia/Jerusalem and the existing Jerusalem 8.5 degree nightfall calculation. An evening run after local midnight is skipped; morning recovery uses the prior evening's event. Custom poster cities and manually entered times remain available. Worldwide reminder localization is not implemented.
+<p align="center"><img src="docs/images/example-poster.jpg" alt="Example Zmunah poster for Shabbat Toldot with entry and exit times for Jerusalem, Tel Aviv-Yafo, Haifa and Beersheba" width="420"></p>
 
-This is a personal beta candidate. Public release is pending the owner decisions and provider checks in [the release guide](docs/RELEASE.md). No code license has been granted by this change. See [the proposal](docs/LICENSE_PROPOSAL.md), [asset and dependency notices](THIRD_PARTY_NOTICES.md), [privacy](public/privacy.html), and [terms](public/terms.html).
+## What it does
+
+- Picks the upcoming Shabbat or holiday on the Israeli calendar, with the weekly parsha, or a later date you choose.
+- Shows entry and exit times for up to eight Israeli cities, each with its own candle-lighting offset (Jerusalem defaults to 40 minutes), or custom cities with times you enter.
+- Adds an optional blessing and a dedication line over your photo or a ready-made background, in square, portrait or original proportions.
+- Has a Sefirat HaOmer mode with a daily count poster in three nusach options.
+- A companion Telegram bot saves poster settings and sends opted-in reminders before Shabbat, holidays and the nightly Omer count.
+
+Times are computed for convenience. Check them against your local calendar or community before relying on them.
+
+## How it works
+
+Python renders each poster in a Vercel serverless function with Pillow and python-bidi. Times are calculated locally with JewCal and Astral, parsha names come from [Hebcal](https://www.hebcal.com/home/developer-apis) (CC BY 4.0) with a validated local fallback for 2024-2040, Redis holds bot preferences and rate limits, and GitHub Actions schedules the reminders. Uploaded photos are processed in a temporary file that is deleted when the request ends. There is no AI service, analytics script or automatic social publishing.
+
+## Status and license
+
+Zmunah is a personal project in beta, maintained by [shacharPash](https://github.com/shacharPash). The source is public to read, but no open-source license has been granted yet. See [the license proposal](docs/LICENSE_PROPOSAL.md), [asset and dependency notices](THIRD_PARTY_NOTICES.md), [privacy](public/privacy.html), [terms](public/terms.html) and [security reporting](SECURITY.md).
+
+## Scope details
+
+Israel parsha readings, with validated local fallback data for 2024-2040. Omer event identity and reminders use Asia/Jerusalem and the existing Jerusalem 8.5 degree nightfall calculation. An evening run after local midnight is skipped; morning recovery uses the prior evening's event. Custom poster cities and manually entered times remain available. Worldwide reminder localization is not implemented. Remaining release checks are listed in [the release guide](docs/RELEASE.md).
 
 ## Setup
 

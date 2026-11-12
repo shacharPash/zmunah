@@ -3,19 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>יוצר זְמוּנָה לשבת ✡</title>
+  <title>יוצר זְמוּנָה לשבת וחג ✡</title>
+  <meta name="description" content="זמן + תמונה = זְמוּנָה! צרו תמונה יפה עם זמני הדלקת נרות לשבת או לחג" />
+  <link rel="canonical" href="https://shabat-posts.vercel.app/" />
 
   <!-- Open Graph / Facebook / WhatsApp -->
   <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="זְמוּנָה" />
+  <meta property="og:locale" content="he_IL" />
+  <meta property="og:url" content="https://shabat-posts.vercel.app/" />
   <meta property="og:title" content="יוצר זְמוּנָה לשבת וחג ✡" />
   <meta property="og:description" content="זמן + תמונה = זְמוּנָה! צרו תמונה יפה עם זמני הדלקת נרות לשבת או לחג" />
-  <meta property="og:image" content="/watermark.png" />
+  <meta property="og:image" content="https://shabat-posts.vercel.app/watermark.png" />
+  <meta property="og:image:alt" content="סמל זְמוּנָה" />
 
   <!-- Twitter -->
   <meta name="twitter:card" content="summary" />
   <meta name="twitter:title" content="יוצר זְמוּנָה לשבת וחג ✡" />
   <meta name="twitter:description" content="זמן + תמונה = זְמוּנָה! צרו תמונה יפה עם זמני הדלקת נרות לשבת או לחג" />
-  <meta name="twitter:image" content="/watermark.png" />
+  <meta name="twitter:image" content="https://shabat-posts.vercel.app/watermark.png" />
 
   <!-- Favicons -->
   <link rel="icon" type="image/x-icon" href="/favicon.ico" />
@@ -4026,7 +4032,6 @@ CITY_CHECKBOXES_PLACEHOLDER
     const omerTodayMeta = document.getElementById("omerTodayMeta");
     const omerSefirahDisplay = document.getElementById("omerSefirahDisplay");
     const omerDayInput = document.getElementById("omerDayInput");
-    const omerTestTimeInput = document.getElementById("omerTestTimeInput");
     const omerTestMode = document.getElementById("omerTestMode");
     const omerDisabledMessage = document.getElementById("omerDisabledMessage");
     const omerContentWrapper = document.getElementById("omerContentWrapper");
@@ -4071,11 +4076,6 @@ CITY_CHECKBOXES_PLACEHOLDER
         // Show test mode banner (override inline display:none)
         omerTestMode.style.display = 'block';
         omerTestMode.classList.add('show');
-        // Set the test time input
-        if (omerTestTimeInput) {
-          // Convert ISO format to datetime-local format
-          omerTestTimeInput.value = testTimeParam.slice(0, 16);
-        }
       } else {
         // Hide test mode banner when no testTime param
         omerTestMode.style.display = 'none';
@@ -4963,8 +4963,6 @@ CITY_CHECKBOXES_PLACEHOLDER
       dateDropdownList.querySelectorAll(".date-dropdown-item").forEach((item, idx) => {
         item.classList.toggle("selected", idx === selectedStartIndex);
       });
-
-      if (typeof updateUploadHint === 'function') updateUploadHint();
     }
 
     // Select a date from dropdown
@@ -5886,12 +5884,6 @@ CITY_CHECKBOXES_PLACEHOLDER
       // Remove any cities from ordered list that are no longer checked
       orderedSelectedCities = orderedSelectedCities.filter(name => checkedCities.includes(name));
 
-      // Show/hide the header based on whether cities are selected
-      const header = document.getElementById('selectedCitiesHeader');
-      if (header) {
-        header.style.display = orderedSelectedCities.length > 0 ? 'flex' : 'none';
-      }
-
       // Render city rows in the user's preferred order
       selectedCitiesList.replaceChildren();
       orderedSelectedCities.forEach(name => {
@@ -6509,20 +6501,6 @@ CITY_CHECKBOXES_PLACEHOLDER
         }
       });
       return customCities;
-    }
-
-    const uploadHint = document.getElementById("uploadHint");
-
-    // Update upload hint based on selected dates
-    function updateUploadHint() {
-      const count = selectedDates.length;
-      if (count > 1) {
-        uploadHint.textContent = `ניתן להעלות עד ${count} תמונות - אחת לכל זְמוּנָה. אם תעלי פחות, התמונה האחרונה תשמש לשאר.`;
-        uploadHint.style.color = "#5c6bc0";
-      } else {
-        uploadHint.textContent = "השאר ריק לשימוש בתמונת ברירת המחדל";
-        uploadHint.style.color = "";
-      }
     }
 
     // File upload button click -> trigger file input (browser shows both gallery and camera on mobile)

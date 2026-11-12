@@ -2,6 +2,7 @@
 
 from html.parser import HTMLParser
 from pathlib import Path
+import re
 import unittest
 
 
@@ -34,6 +35,14 @@ class TemplateInitialStateTests(unittest.TestCase):
             for name, value in [declaration.split(":", 1)]
         }
         self.assertEqual(declarations.get("display"), "none")
+
+    def test_script_reads_only_elements_present_in_markup(self) -> None:
+        template = (Path(__file__).parents[1] / "api" / "template.html").read_text(encoding="utf-8")
+        declared = set(re.findall(r"""\bid=["']([^"']+)["']""", template))
+        referenced = set(re.findall(r"""getElementById\(\s*["']([^"']+)["']\s*\)""", template))
+
+        self.assertTrue(referenced)
+        self.assertEqual(sorted(referenced - declared), [])
 
 
 if __name__ == "__main__":
