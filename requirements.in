@@ -1,5 +1,5 @@
 # Runtime inputs. Regenerate requirements.txt with pip-compile, never pip freeze.
-python-dateutil~=2.9.0
+python-dateutil~=4.0.0
 requests==2.34.2
 Pillow==13.0.0
 arabic-reshaper~=3.0.0
