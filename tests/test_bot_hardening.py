@@ -628,6 +628,14 @@ def test_contact_is_listed_in_help(isolated_redis):
     assert '/contact' in send.call_args.args[1]
 
 
+def test_data_rights_commands_are_listed_in_help(isolated_redis):
+    with patch.object(bot, 'send_message') as send:
+        bot.process_update(private_update(913, text='/help'))
+    text = send.call_args.args[1]
+    for command in ('/privacy', '/export', '/delete_my_data'):
+        assert command in text
+
+
 def test_contact_is_registered_in_command_menu():
     response = Mock()
     response.json.return_value = {'ok': True, 'result': True}
