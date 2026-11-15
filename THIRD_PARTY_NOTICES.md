@@ -41,7 +41,7 @@ Notably `python-bidi` 0.6.11 includes LGPLv3 (`COPYING.LESSER`), the incorporate
 | --- | --- | --- | --- |
 | annotated-doc | 0.0.5 | MIT | `annotated_doc-0.0.5.dist-info/licenses/LICENSE` |
 | annotated-types | 0.8.0 | MIT | `annotated_types-0.8.0.dist-info/licenses/LICENSE` |
-| anyio | 4.14.2 | MIT | `anyio-4.14.2.dist-info/licenses/LICENSE` |
+| anyio | 4.16.0 | MIT | `anyio-4.16.0.dist-info/licenses/LICENSE` |
 | arabic-reshaper | 3.0.1 | MIT | `arabic_reshaper-3.0.1.dist-info/licenses/LICENSE` |
 | astral | 3.2 | Apache-2.0 | `astral-3.2.dist-info/LICENSE` |
 | certifi | 2026.10.19 | MPL-2.0 | `certifi-2026.10.19.dist-info/licenses/LICENSE` |
@@ -56,18 +56,18 @@ Notably `python-bidi` 0.6.11 includes LGPLv3 (`COPYING.LESSER`), the incorporate
 | pydantic | 2.13.5 | MIT | `pydantic-2.13.5.dist-info/licenses/LICENSE` |
 | pydantic-core | 2.46.5 | MIT | `pydantic_core-2.46.5.dist-info/licenses/LICENSE` |
 | python-bidi | 0.6.11 | License :: OSI Approved :: GNU Library or Lesser General Public License (LGPL) | `python_bidi-0.6.11.dist-info/licenses/COPYING`; `python_bidi-0.6.11.dist-info/licenses/COPYING.LESSER`; `python_bidi-0.6.11.dist-info/licenses/LICENSE-THIRD-PARTY.yml` |
-| python-dateutil | 2.9.0.post0 | Dual License | `python_dateutil-2.9.0.post0.dist-info/LICENSE` |
+| python-dateutil | 4.0.0 | BSD-3-Clause | `python_dateutil-4.0.0.dist-info/licenses/LICENSE` |
 | python-dotenv | 1.2.3 | BSD-3-Clause | `python_dotenv-1.2.3.dist-info/licenses/LICENSE` |
-| pytz | 2025.2 | MIT | `pytz-2025.2.dist-info/LICENSE.txt` |
+| pytz | 2026.6 | MIT | `pytz-2026.6.dist-info/LICENSE.txt` |
 | pyyaml | 6.0.3 | MIT | `pyyaml-6.0.3.dist-info/licenses/LICENSE` |
-| redis | 5.0.8 | MIT | `redis-5.0.8.dist-info/LICENSE` |
+| redis | 8.1.0 | MIT | `redis-8.1.0.dist-info/licenses/LICENSE` |
 | requests | 2.34.2 | Apache-2.0 | `requests-2.34.2.dist-info/licenses/LICENSE`; `requests-2.34.2.dist-info/licenses/NOTICE` |
-| six | 1.17.0 | MIT | `six-1.17.0.dist-info/LICENSE` |
-| starlette | 1.6.0 | BSD-3-Clause | `starlette-1.6.0.dist-info/licenses/LICENSE.md` |
+| starlette | 1.7.0 | BSD-3-Clause | `starlette-1.7.0.dist-info/licenses/LICENSE.md` |
 | typing-extensions | 4.16.0 | PSF-2.0 | `typing_extensions-4.16.0.dist-info/licenses/LICENSE` |
 | typing-inspection | 0.4.4 | MIT | `typing_inspection-0.4.4.dist-info/licenses/LICENSE` |
+| tzdata | 2026.6 | Apache-2.0 | `tzdata-2026.6.dist-info/licenses/LICENSE`; `tzdata-2026.6.dist-info/licenses/licenses/LICENSE_APACHE` |
 | urllib3 | 2.8.0 | MIT | `urllib3-2.8.0.dist-info/licenses/LICENSE.txt` |
-| uvicorn | 0.41.0 | BSD-3-Clause | `uvicorn-0.41.0.dist-info/licenses/LICENSE.md` |
+| uvicorn | 0.53.0 | BSD-3-Clause | `uvicorn-0.53.0.dist-info/licenses/LICENSE.md` |
 | uvloop | 0.22.1 | MIT License | `uvloop-0.22.1.dist-info/licenses/LICENSE-APACHE`; `uvloop-0.22.1.dist-info/licenses/LICENSE-MIT` |
 | watchfiles | 1.2.0 | MIT | `watchfiles-1.2.0.dist-info/licenses/LICENSE` |
 | websockets | 17.1 | BSD-3-Clause | `websockets-17.1.dist-info/licenses/LICENSE` |
