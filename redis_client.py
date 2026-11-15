@@ -39,6 +39,25 @@ DEFAULT_PREFERENCES: Dict[str, Any] = {
     "shabbat_reminder_enabled": False  # Shabbat/Holiday Eve reminder
 }
 
+PREFS_VERSION_KEY = "prefs_version"
+CURRENT_PREFS_VERSION = 1
+
+
+def migrate_prefs(prefs: Dict[str, Any]) -> Dict[str, Any]:
+    """Upgrade saved preferences in place. Version 1 moves a stored Haifa offset of 20 to 30."""
+    version = prefs.get(PREFS_VERSION_KEY)
+    if isinstance(version, int) and not isinstance(version, bool) and version >= CURRENT_PREFS_VERSION:
+        return prefs
+    cities = prefs.get("cities")
+    if isinstance(cities, list):
+        for city in cities:
+            if (isinstance(city, dict) and city.get("name") == "חיפה"
+                    and type(city.get("candle_offset")) is int and city["candle_offset"] == 20):
+                city["candle_offset"] = 30
+    prefs[PREFS_VERSION_KEY] = CURRENT_PREFS_VERSION
+    return prefs
+
+
 # Cached Redis client
 _redis_client: Optional[redis.Redis] = None
 
@@ -90,7 +109,7 @@ def get_user_prefs(user_id: str) -> Dict[str, Any]:
         # Merge with defaults to ensure all keys exist
         result = deepcopy(DEFAULT_PREFERENCES)
         result.update(prefs if isinstance(prefs, dict) else {})
-        return result
+        return migrate_prefs(result)
     except json.JSONDecodeError:
         return deepcopy(DEFAULT_PREFERENCES)
 
@@ -106,6 +125,7 @@ def set_user_prefs(user_id: str, prefs: Dict[str, Any]) -> None:
     def reset(current):
         current.clear()
         current.update(deepcopy(prefs))
+        current.setdefault(PREFS_VERSION_KEY, CURRENT_PREFS_VERSION)
     mutate_user_prefs(user_id, reset)
 
 
@@ -289,6 +309,7 @@ def mutate_user_prefs(user_id: str, mutation, retries: int = 64) -> Dict[str, An
                     saved = json.loads(raw)
                     if isinstance(saved, dict):
                         prefs.update(saved)
+                migrate_prefs(prefs)
                 mutation(prefs)
                 pipe.multi()
                 pipe.set(key, json.dumps(prefs, ensure_ascii=False))

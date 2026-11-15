@@ -1397,3 +1397,60 @@ def test_backup_workflows_outlast_the_runner_budget():
             primary = [int(job['schedule'].split()[1]) for job in json.load(config)['crons']
                        if job['path'] == '/api/' + name.replace('-', '_')]
         assert backup_hour > min(primary)
+
+
+def _haifa_offset(prefs):
+    return next(city['candle_offset'] for city in prefs['cities'] if city['name'] == 'חיפה')
+
+
+def _store_legacy_prefs(client, user_id, haifa_offset=20, **extra):
+    prefs = {'cities': [{'name': 'ירושלים', 'candle_offset': 40},
+                        {'name': 'תל אביב -יפו', 'candle_offset': 20},
+                        {'name': 'חיפה', 'candle_offset': haifa_offset}], **extra}
+    client.set(f'zmunah:user:{user_id}', json.dumps(prefs, ensure_ascii=False))
+
+
+def test_reading_legacy_prefs_moves_haifa_to_30_without_writing(isolated_redis):
+    _store_legacy_prefs(isolated_redis, 920)
+    stored = isolated_redis.get('zmunah:user:920')
+    prefs = storage.get_user_prefs('920')
+    assert _haifa_offset(prefs) == 30
+    assert next(c['candle_offset'] for c in prefs['cities'] if c['name'] == 'תל אביב -יפו') == 20
+    assert isolated_redis.get('zmunah:user:920') == stored
+
+
+def test_next_save_persists_the_haifa_migration(isolated_redis):
+    _store_legacy_prefs(isolated_redis, 921, blessing_text='שבת שלום')
+    storage.update_user_prefs('921', {'date_format': 'hebrew'})
+    saved = json.loads(isolated_redis.get('zmunah:user:921'))
+    assert _haifa_offset(saved) == 30
+    assert saved[storage.PREFS_VERSION_KEY] == storage.CURRENT_PREFS_VERSION
+    assert saved['blessing_text'] == 'שבת שלום'
+
+
+def test_haifa_migration_runs_once_and_keeps_a_later_choice_of_20(isolated_redis):
+    _store_legacy_prefs(isolated_redis, 922)
+    prefs = storage.get_user_prefs('922')
+    for city in prefs['cities']:
+        if city['name'] == 'חיפה':
+            city['candle_offset'] = 20
+    storage.update_user_prefs('922', {'cities': prefs['cities']})
+    storage.update_user_prefs('922', {'date_format': 'gregorian'})
+    assert _haifa_offset(storage.get_user_prefs('922')) == 20
+    assert _haifa_offset(json.loads(isolated_redis.get('zmunah:user:922'))) == 20
+
+
+def test_haifa_migration_leaves_other_offsets_and_odd_data_alone():
+    custom = {'cities': [{'name': 'חיפה', 'candle_offset': 25}]}
+    assert _haifa_offset(storage.migrate_prefs(custom)) == 25
+    for cities in (None, 'חיפה', [None, 'חיפה', {'name': 'חיפה'}, {'name': 'חיפה', 'candle_offset': True}]):
+        prefs = storage.migrate_prefs({'cities': cities})
+        assert prefs[storage.PREFS_VERSION_KEY] == storage.CURRENT_PREFS_VERSION
+    assert prefs['cities'][3]['candle_offset'] is True
+
+
+def test_reset_writes_current_prefs_version(isolated_redis):
+    storage.set_user_prefs('923', storage.get_user_prefs('923'))
+    saved = json.loads(isolated_redis.get('zmunah:user:923'))
+    assert saved[storage.PREFS_VERSION_KEY] == storage.CURRENT_PREFS_VERSION
+    assert _haifa_offset(saved) == 30
