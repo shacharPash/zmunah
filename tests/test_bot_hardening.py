@@ -601,6 +601,58 @@ def test_whitespace_message_is_safely_ignored(isolated_redis):
         keyboard.assert_not_called()
 
 
+def test_contact_command_gives_private_email_and_points_to_privacy(isolated_redis):
+    with patch.object(bot, 'send_message') as send:
+        bot.process_update(private_update(910, text='/contact'))
+    text = send.call_args.args[1]
+    assert 'privet.rattan.1i@icloud.com' in text
+    assert 'https://github.com/shacharPash' in text
+    assert '/privacy' in text
+    assert not isolated_redis.exists('zmunah:user:123')
+
+
+@pytest.mark.parametrize('omer_period', [False, True])
+def test_start_links_privacy_page_and_contact(isolated_redis, omer_period):
+    with patch.object(bot, 'is_omer_period', return_value=omer_period), \
+            patch.object(bot, 'send_message_with_keyboard') as send:
+        bot.process_update(private_update(912, text='/start'))
+    text = send.call_args.args[1]
+    assert f'<a href="{bot.PRIVACY_PAGE_URL}">' in text
+    assert bot.PRIVACY_PAGE_URL.startswith(bot.WEB_APP_URL.rstrip('/'))
+    assert '/contact' in text.splitlines()[-1]
+
+
+def test_contact_is_listed_in_help(isolated_redis):
+    with patch.object(bot, 'send_message') as send:
+        bot.process_update(private_update(911, text='/help'))
+    assert '/contact' in send.call_args.args[1]
+
+
+def test_data_rights_commands_are_listed_in_help(isolated_redis):
+    with patch.object(bot, 'send_message') as send:
+        bot.process_update(private_update(913, text='/help'))
+    text = send.call_args.args[1]
+    for command in ('/privacy', '/export', '/delete_my_data'):
+        assert command in text
+
+
+def test_help_credits_hebcal(isolated_redis):
+    with patch.object(bot, 'send_message') as send:
+        bot.process_update(private_update(914, text='/help'))
+    assert 'Hebcal.com' in send.call_args.args[1]
+    assert 'CC BY 4.0' in send.call_args.args[1]
+
+
+def test_contact_is_registered_in_command_menu():
+    response = Mock()
+    response.json.return_value = {'ok': True, 'result': True}
+    with patch.object(bot.requests, 'post', return_value=response) as post:
+        bot.set_bot_commands()
+    commands = [entry['command'] for entry in post.call_args.kwargs['json']['commands']]
+    assert 'contact' in commands
+    assert len(commands) == len(set(commands))
+
+
 def test_fixed_subscriber_traversal_survives_delivery_key_churn(isolated_redis):
     """Deterministically move live SCAN page boundaries as bookkeeping grows."""
     for uid in range(1, 15):
@@ -1345,3 +1397,60 @@ def test_backup_workflows_outlast_the_runner_budget():
             primary = [int(job['schedule'].split()[1]) for job in json.load(config)['crons']
                        if job['path'] == '/api/' + name.replace('-', '_')]
         assert backup_hour > min(primary)
+
+
+def _haifa_offset(prefs):
+    return next(city['candle_offset'] for city in prefs['cities'] if city['name'] == 'חיפה')
+
+
+def _store_legacy_prefs(client, user_id, haifa_offset=20, **extra):
+    prefs = {'cities': [{'name': 'ירושלים', 'candle_offset': 40},
+                        {'name': 'תל אביב -יפו', 'candle_offset': 20},
+                        {'name': 'חיפה', 'candle_offset': haifa_offset}], **extra}
+    client.set(f'zmunah:user:{user_id}', json.dumps(prefs, ensure_ascii=False))
+
+
+def test_reading_legacy_prefs_moves_haifa_to_30_without_writing(isolated_redis):
+    _store_legacy_prefs(isolated_redis, 920)
+    stored = isolated_redis.get('zmunah:user:920')
+    prefs = storage.get_user_prefs('920')
+    assert _haifa_offset(prefs) == 30
+    assert next(c['candle_offset'] for c in prefs['cities'] if c['name'] == 'תל אביב -יפו') == 20
+    assert isolated_redis.get('zmunah:user:920') == stored
+
+
+def test_next_save_persists_the_haifa_migration(isolated_redis):
+    _store_legacy_prefs(isolated_redis, 921, blessing_text='שבת שלום')
+    storage.update_user_prefs('921', {'date_format': 'hebrew'})
+    saved = json.loads(isolated_redis.get('zmunah:user:921'))
+    assert _haifa_offset(saved) == 30
+    assert saved[storage.PREFS_VERSION_KEY] == storage.CURRENT_PREFS_VERSION
+    assert saved['blessing_text'] == 'שבת שלום'
+
+
+def test_haifa_migration_runs_once_and_keeps_a_later_choice_of_20(isolated_redis):
+    _store_legacy_prefs(isolated_redis, 922)
+    prefs = storage.get_user_prefs('922')
+    for city in prefs['cities']:
+        if city['name'] == 'חיפה':
+            city['candle_offset'] = 20
+    storage.update_user_prefs('922', {'cities': prefs['cities']})
+    storage.update_user_prefs('922', {'date_format': 'gregorian'})
+    assert _haifa_offset(storage.get_user_prefs('922')) == 20
+    assert _haifa_offset(json.loads(isolated_redis.get('zmunah:user:922'))) == 20
+
+
+def test_haifa_migration_leaves_other_offsets_and_odd_data_alone():
+    custom = {'cities': [{'name': 'חיפה', 'candle_offset': 25}]}
+    assert _haifa_offset(storage.migrate_prefs(custom)) == 25
+    for cities in (None, 'חיפה', [None, 'חיפה', {'name': 'חיפה'}, {'name': 'חיפה', 'candle_offset': True}]):
+        prefs = storage.migrate_prefs({'cities': cities})
+        assert prefs[storage.PREFS_VERSION_KEY] == storage.CURRENT_PREFS_VERSION
+    assert prefs['cities'][3]['candle_offset'] is True
+
+
+def test_reset_writes_current_prefs_version(isolated_redis):
+    storage.set_user_prefs('923', storage.get_user_prefs('923'))
+    saved = json.loads(isolated_redis.get('zmunah:user:923'))
+    assert saved[storage.PREFS_VERSION_KEY] == storage.CURRENT_PREFS_VERSION
+    assert _haifa_offset(saved) == 30

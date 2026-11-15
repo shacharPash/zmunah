@@ -146,6 +146,15 @@ class TestCitiesModule(unittest.TestCase):
         offset = _get_candle_offset("חיפה")
         self.assertEqual(offset, 30)
 
+    def test_default_city_lists_use_the_city_offsets(self):
+        """Bot and poster defaults should match the offsets the web page shows."""
+        import config
+        import make_shabbat_posts
+        from redis_client import DEFAULT_PREFERENCES
+        for cities in (DEFAULT_PREFERENCES["cities"], config.DEFAULT_CITIES, make_shabbat_posts.DEFAULT_CITIES):
+            for city in cities:
+                self.assertEqual(city["candle_offset"], _get_candle_offset(city["name"]), city["name"])
+
     def test_get_candle_offset_unknown_city(self):
         """Unknown city should use default offset."""
         offset = _get_candle_offset("עיר_לא_קיימת")

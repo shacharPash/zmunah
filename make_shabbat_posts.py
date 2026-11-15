@@ -104,7 +104,7 @@ WATERMARK_OPACITY = 0.5  # 50% opacity (0.0 = invisible, 1.0 = fully opaque)
 DEFAULT_CITIES = [
     {"name": "ירושלים", "lat": 31.779737, "lon": 35.209554, "candle_offset": 40},
     {"name": "תל אביב -יפו", "lat": 32.079112, "lon": 34.777326, "candle_offset": 20},
-    {"name": "חיפה", "lat": 32.801771, "lon": 35.000609, "candle_offset": 20},
+    {"name": "חיפה", "lat": 32.801771, "lon": 35.000609, "candle_offset": 30},
     {"name": "באר שבע", "lat": 31.256689, "lon": 34.786409, "candle_offset": 20},
 ]
 # Keep CITIES as alias for backward compatibility
