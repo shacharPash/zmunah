@@ -905,7 +905,8 @@ def handle_help(update: Dict[str, Any]) -> None:
         "/delete_my_data - 🗑️ מחיקת המידע שלי\n"
         "/contact - 📬 יצירת קשר\n\n"
         "💡 <b>שימוש:</b>\n"
-        "שלח תמונה ואני אצור ממנה פוסטר!"
+        "שלח תמונה ואני אצור ממנה פוסטר!\n\n"
+        "📖 נתוני פרשות השבוע: Hebcal.com, ברישיון CC BY 4.0"
     )
     send_message(chat_id, help_text)
 

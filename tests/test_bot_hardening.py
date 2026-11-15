@@ -636,6 +636,13 @@ def test_data_rights_commands_are_listed_in_help(isolated_redis):
         assert command in text
 
 
+def test_help_credits_hebcal(isolated_redis):
+    with patch.object(bot, 'send_message') as send:
+        bot.process_update(private_update(914, text='/help'))
+    assert 'Hebcal.com' in send.call_args.args[1]
+    assert 'CC BY 4.0' in send.call_args.args[1]
+
+
 def test_contact_is_registered_in_command_menu():
     response = Mock()
     response.json.return_value = {'ok': True, 'result': True}
