@@ -12,21 +12,21 @@ Official unmodified Google Fonts Alef Regular/Bold are bundled at the repository
 
 ## Images and local data with unresolved rights
 
-The files below are preserved pending the owner’s provenance/permission decision. Do not claim they are MIT, CC-licensed or owned by the maintainer from their presence in this repository. Publication is gated on verification. Duplicate files are inventoried too.
+The owner created the shin-with-flame mark (watermark and site icons) with an AI image generator. The files still marked unverified are preserved pending the owner’s provenance/permission decision. Do not claim those are MIT, CC-licensed or owned by the maintainer from their presence in this repository. Their publication is gated on verification. Duplicate files are inventoried too.
 
 | Bundled path | SHA256 | Rights status |
 | --- | --- | --- |
-| `public/favicon-16x16.png` | `b919fa9433a2677dab94ffbf5b0a812b74a2b7529c56ae6a689002ae4a0ef49f` | Unverified; owner permission required |
-| `public/watermark.png` | `2ac573b83de4c0403cb44f2434bf36e4a9d2d676369f1983be8568e1baf1afb8` | Unverified; owner permission required |
-| `public/apple-touch-icon.png` | `5ad01e505ae7fb16229f08c3140c32e413f45a92c46b0966ef3b67078e170d87` | Unverified; owner permission required |
-| `public/favicon-48x48.png` | `a9aca727d4c315de2bdf65fc7a0f924d002024cc787b0cfe2efb98ebc97020ce` | Unverified; owner permission required |
-| `public/favicon-32x32.png` | `726ede19e7b956f3fe20794918b92581a5b44e8da4828a46fdedc199991f45b3` | Unverified; owner permission required |
-| `api/watermark.png` | `2ac573b83de4c0403cb44f2434bf36e4a9d2d676369f1983be8568e1baf1afb8` | Unverified; owner permission required |
+| `public/favicon-16x16.png` | `b919fa9433a2677dab94ffbf5b0a812b74a2b7529c56ae6a689002ae4a0ef49f` | Created by the owner with an AI image generator |
+| `public/watermark.png` | `2ac573b83de4c0403cb44f2434bf36e4a9d2d676369f1983be8568e1baf1afb8` | Created by the owner with an AI image generator |
+| `public/apple-touch-icon.png` | `5ad01e505ae7fb16229f08c3140c32e413f45a92c46b0966ef3b67078e170d87` | Created by the owner with an AI image generator |
+| `public/favicon-48x48.png` | `a9aca727d4c315de2bdf65fc7a0f924d002024cc787b0cfe2efb98ebc97020ce` | Created by the owner with an AI image generator |
+| `public/favicon-32x32.png` | `726ede19e7b956f3fe20794918b92581a5b44e8da4828a46fdedc199991f45b3` | Created by the owner with an AI image generator |
+| `api/watermark.png` | `2ac573b83de4c0403cb44f2434bf36e4a9d2d676369f1983be8568e1baf1afb8` | Created by the owner with an AI image generator |
 | `api/omer_default.png` | `5bfe85529ed3452df362f60fc856b94f085c956f8180818bea3e611b01e25707` | Unverified; owner permission required |
 | `api/shabat_default.png` | `727ebd63e4c46e3b40963289bc2c5a2990a4143f6ee3252919d29294216c6135` | Unverified; owner permission required |
 | `public/backgrounds/omer_default.png` | `5bfe85529ed3452df362f60fc856b94f085c956f8180818bea3e611b01e25707` | Unverified; owner permission required |
 | `public/backgrounds/shabat_default.png` | `727ebd63e4c46e3b40963289bc2c5a2990a4143f6ee3252919d29294216c6135` | Unverified; owner permission required |
-| `public/favicon.ico` | `1fecee2324c19123cf636710ae8e1770ac31d5db8fd7d1e9fac36df4c8c447fe` | Unverified; owner permission required |
+| `public/favicon.ico` | `1fecee2324c19123cf636710ae8e1770ac31d5db8fd7d1e9fac36df4c8c447fe` | Created by the owner with an AI image generator |
 | `docs/images/example-poster.jpg` | `b19208d5037c7b8b6b3becc2ce83ce9e3e865bef6dc438e4a9700bbf23d6d59c` | README example rendered from `api/shabat_default.png` and `api/watermark.png`; same unverified status |
 
 The provenance/license of `cities_coordinates.geojson` also needs verification before redistribution. `cities.py`, local calendar helpers and translation code are subject to the owner’s code-license choice; generated Hebcal data retains its separate attribution.
