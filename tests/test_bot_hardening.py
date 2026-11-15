@@ -611,6 +611,17 @@ def test_contact_command_gives_private_email_and_points_to_privacy(isolated_redi
     assert not isolated_redis.exists('zmunah:user:123')
 
 
+@pytest.mark.parametrize('omer_period', [False, True])
+def test_start_links_privacy_page_and_contact(isolated_redis, omer_period):
+    with patch.object(bot, 'is_omer_period', return_value=omer_period), \
+            patch.object(bot, 'send_message_with_keyboard') as send:
+        bot.process_update(private_update(912, text='/start'))
+    text = send.call_args.args[1]
+    assert f'<a href="{bot.PRIVACY_PAGE_URL}">' in text
+    assert bot.PRIVACY_PAGE_URL.startswith(bot.WEB_APP_URL.rstrip('/'))
+    assert '/contact' in text.splitlines()[-1]
+
+
 def test_contact_is_listed_in_help(isolated_redis):
     with patch.object(bot, 'send_message') as send:
         bot.process_update(private_update(911, text='/help'))

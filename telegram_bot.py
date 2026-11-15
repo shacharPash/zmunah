@@ -6,6 +6,7 @@ Shabbat time posters via Telegram.
 """
 
 import base64
+import html
 import io
 import json
 import secrets
@@ -84,6 +85,7 @@ USER_STATE_KEY = "zmunah:state:{user_id}"
 
 # Website URL for web version
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://shabat-posts.vercel.app/")
+PRIVACY_PAGE_URL = f"{WEB_APP_URL.rstrip('/')}/privacy.html"
 
 CONTACT_EMAIL = "privet.rattan.1i@icloud.com"
 GITHUB_PROFILE_URL = "https://github.com/shacharPash"
@@ -746,6 +748,8 @@ def handle_start(update: Dict[str, Any]) -> None:
             "💡 <b>טיפ:</b> אפשר להפעיל תזכורות שבת אוטומטיות!\n"
             "לחץ על ⚙️ הגדרות שבת למטה."
         )
+
+    welcome_text += f'\n\n🔒 <a href="{html.escape(PRIVACY_PAGE_URL)}">מדיניות הפרטיות</a> · יצירת קשר: /contact'
 
     # Build keyboard based on Omer period
     keyboard = [
@@ -2829,7 +2833,7 @@ def handle_privacy_command(update, command):
             "הבוט שומר הגדרות, מזהי תמונות בטלגרם, מצב שיחה זמני וסימוני תזכורות וספירה. "
             "הפקודה /export מאפשרת לקבל עותק פרטי. הפקודה /delete_my_data מוחקת את המידע השמור ומפסיקה תזכורות לאחר אישור. "
             "המחיקה אינה מוחקת עותקים בטלגרם. נשמרת קבלת מניעת הפעלה חוזרת ללא מזהה משתמש למשך שבעה ימים. "
-            f"פרטים: {WEB_APP_URL.rstrip('/')}/privacy.html", parse_mode=None)
+            f"פרטים: {PRIVACY_PAGE_URL}", parse_mode=None)
         return
     action = 'delete' if command == '/delete_my_data' else 'export'
     nonce = secrets.token_hex(12)
