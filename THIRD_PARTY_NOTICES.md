@@ -10,9 +10,9 @@ Parsha data is from [Hebcal developer APIs](https://www.hebcal.com/home/develope
 
 Official unmodified Google Fonts Alef Regular/Bold are bundled at the repository root for rendering. Official Heebo variable TrueType is served locally at `public/fonts/Heebo.ttf`. Required verbatim copyright and SIL Open Font License 1.1 notices are in `public/fonts/Alef-OFL.txt` and `public/fonts/Heebo-OFL.txt`. Source URLs, byte sizes and SHA256 are recorded in `public/fonts/provenance.json`. The official Alef replacement preserves the tested poster glyph appearance; old font file provenance was not inferred from its filename.
 
-## Images and local data with unresolved rights
+## Images and local data
 
-The owner created the shin-with-flame mark (watermark and site icons) with an AI image generator. The files still marked unverified are preserved pending the owner’s provenance/permission decision. Do not claim those are MIT, CC-licensed or owned by the maintainer from their presence in this repository. Their publication is gated on verification. Duplicate files are inventoried too.
+The owner created all bundled images, the shin-with-flame mark (watermark and site icons) and the Shabbat and Omer backgrounds, with an AI image generator. Duplicate files are inventoried too.
 
 | Bundled path | SHA256 | Rights status |
 | --- | --- | --- |
@@ -22,12 +22,12 @@ The owner created the shin-with-flame mark (watermark and site icons) with an AI
 | `public/favicon-48x48.png` | `a9aca727d4c315de2bdf65fc7a0f924d002024cc787b0cfe2efb98ebc97020ce` | Created by the owner with an AI image generator |
 | `public/favicon-32x32.png` | `726ede19e7b956f3fe20794918b92581a5b44e8da4828a46fdedc199991f45b3` | Created by the owner with an AI image generator |
 | `api/watermark.png` | `2ac573b83de4c0403cb44f2434bf36e4a9d2d676369f1983be8568e1baf1afb8` | Created by the owner with an AI image generator |
-| `api/omer_default.png` | `5bfe85529ed3452df362f60fc856b94f085c956f8180818bea3e611b01e25707` | Unverified; owner permission required |
-| `api/shabat_default.png` | `727ebd63e4c46e3b40963289bc2c5a2990a4143f6ee3252919d29294216c6135` | Unverified; owner permission required |
-| `public/backgrounds/omer_default.png` | `5bfe85529ed3452df362f60fc856b94f085c956f8180818bea3e611b01e25707` | Unverified; owner permission required |
-| `public/backgrounds/shabat_default.png` | `727ebd63e4c46e3b40963289bc2c5a2990a4143f6ee3252919d29294216c6135` | Unverified; owner permission required |
+| `api/omer_default.png` | `5bfe85529ed3452df362f60fc856b94f085c956f8180818bea3e611b01e25707` | Created by the owner with an AI image generator |
+| `api/shabat_default.png` | `727ebd63e4c46e3b40963289bc2c5a2990a4143f6ee3252919d29294216c6135` | Created by the owner with an AI image generator |
+| `public/backgrounds/omer_default.png` | `5bfe85529ed3452df362f60fc856b94f085c956f8180818bea3e611b01e25707` | Created by the owner with an AI image generator |
+| `public/backgrounds/shabat_default.png` | `727ebd63e4c46e3b40963289bc2c5a2990a4143f6ee3252919d29294216c6135` | Created by the owner with an AI image generator |
 | `public/favicon.ico` | `1fecee2324c19123cf636710ae8e1770ac31d5db8fd7d1e9fac36df4c8c447fe` | Created by the owner with an AI image generator |
-| `docs/images/example-poster.jpg` | `b19208d5037c7b8b6b3becc2ce83ce9e3e865bef6dc438e4a9700bbf23d6d59c` | README example rendered from `api/shabat_default.png` and `api/watermark.png`; same unverified status |
+| `docs/images/example-poster.jpg` | `b19208d5037c7b8b6b3becc2ce83ce9e3e865bef6dc438e4a9700bbf23d6d59c` | README example rendered from `api/shabat_default.png` and `api/watermark.png`, both created by the owner |
 
 The provenance/license of `cities_coordinates.geojson` also needs verification before redistribution. `cities.py`, local calendar helpers and translation code are subject to the owner’s code-license choice; generated Hebcal data retains its separate attribution.
 
