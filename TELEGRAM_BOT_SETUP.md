@@ -76,6 +76,18 @@ You should see a response like:
 }
 ```
 
+## Set the Privacy Policy link
+
+Telegram lets each bot link a privacy policy from its profile. Point it at this
+service's privacy page:
+
+1. Open [@BotFather](https://t.me/BotFather), send `/mybots` and choose the bot.
+2. In the bot's settings, choose **Privacy Policy**.
+3. Send `<WEB_APP_URL>/privacy.html`, the same page the bot's `/privacy` command
+   links to. For the live site that is `https://shabat-posts.vercel.app/privacy.html`.
+
+This is not `/setprivacy`, which only switches the bot's privacy mode in groups.
+
 ## Test the Bot
 
 1. Open your bot in Telegram (search for your bot's username)
