@@ -24,7 +24,7 @@ DEFAULT_PREFERENCES: Dict[str, Any] = {
     "cities": [
         {"name": "ירושלים", "candle_offset": 40},
         {"name": "תל אביב -יפו", "candle_offset": 20},
-        {"name": "חיפה", "candle_offset": 20}
+        {"name": "חיפה", "candle_offset": 30}
     ],
     "date_format": "both",
     "blessing_text": None,
