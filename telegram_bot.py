@@ -85,6 +85,9 @@ USER_STATE_KEY = "zmunah:state:{user_id}"
 # Website URL for web version
 WEB_APP_URL = os.getenv("WEB_APP_URL", "https://shabat-posts.vercel.app/")
 
+CONTACT_EMAIL = "privet.rattan.1i@icloud.com"
+GITHUB_PROFILE_URL = "https://github.com/shacharPash"
+
 # Date format display names
 DATE_FORMAT_LABELS = {
     "hebrew": "עברי",
@@ -892,11 +895,26 @@ def handle_help(update: Dict[str, Any]) -> None:
         "/reset - 🔄 איפוס להגדרות ברירת מחדל\n"
         "/clear_blessing - נקה טקסט ברכה\n"
         "/clear_memorial - נקה לעילוי נשמת\n"
-        "/clear_image - 🗑️ מחק תמונה שמורה\n\n"
+        "/clear_image - 🗑️ מחק תמונה שמורה\n"
+        "/contact - 📬 יצירת קשר\n\n"
         "💡 <b>שימוש:</b>\n"
         "שלח תמונה ואני אצור ממנה פוסטר!"
     )
     send_message(chat_id, help_text)
+
+
+def handle_contact(update: Dict[str, Any]) -> None:
+    """Handle /contact command - show the operator's contact details."""
+    chat_id = get_chat_id(update)
+    if not chat_id:
+        return
+
+    send_message(chat_id,
+        "📬 יצירת קשר עם מפעיל הבוט, שחר פשחור\n"
+        f"דוא״ל: {CONTACT_EMAIL}\n"
+        f"פרופיל GitHub: {GITHUB_PROFILE_URL}\n\n"
+        "בדוא״ל אפשר לבקש עיון במידע, תיקון או מחיקה, לפנות בנושא נגישות או הסרת תוכן ולשאול שאלות.\n"
+        "פרטים על המידע שהבוט שומר: /privacy", parse_mode=None)
 
 
 def handle_reminder(update: Dict[str, Any]) -> None:
@@ -2755,6 +2773,8 @@ def _route_update(update: Dict[str, Any]) -> None:
             handle_reminder(update)
         elif command == "/help":
             handle_help(update)
+        elif command == "/contact":
+            handle_contact(update)
         return
 
     # Check for photo
@@ -2785,6 +2805,7 @@ def set_bot_commands() -> Dict[str, Any]:
         {"command": "privacy", "description": "פרטיות ושימוש במידע"},
         {"command": "export", "description": "יצוא המידע שלי"},
         {"command": "delete_my_data", "description": "מחיקת המידע שלי"},
+        {"command": "contact", "description": "יצירת קשר"},
         {"command": "start", "description": "התחל מחדש"},
         {"command": "poster", "description": "📸 צור פוסטר שבת/עומר"},
         {"command": "omer", "description": "🔢 צור פוסטר ספירת העומר"},

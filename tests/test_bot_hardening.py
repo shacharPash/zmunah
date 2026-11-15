@@ -601,6 +601,32 @@ def test_whitespace_message_is_safely_ignored(isolated_redis):
         keyboard.assert_not_called()
 
 
+def test_contact_command_gives_private_email_and_points_to_privacy(isolated_redis):
+    with patch.object(bot, 'send_message') as send:
+        bot.process_update(private_update(910, text='/contact'))
+    text = send.call_args.args[1]
+    assert 'privet.rattan.1i@icloud.com' in text
+    assert 'https://github.com/shacharPash' in text
+    assert '/privacy' in text
+    assert not isolated_redis.exists('zmunah:user:123')
+
+
+def test_contact_is_listed_in_help(isolated_redis):
+    with patch.object(bot, 'send_message') as send:
+        bot.process_update(private_update(911, text='/help'))
+    assert '/contact' in send.call_args.args[1]
+
+
+def test_contact_is_registered_in_command_menu():
+    response = Mock()
+    response.json.return_value = {'ok': True, 'result': True}
+    with patch.object(bot.requests, 'post', return_value=response) as post:
+        bot.set_bot_commands()
+    commands = [entry['command'] for entry in post.call_args.kwargs['json']['commands']]
+    assert 'contact' in commands
+    assert len(commands) == len(set(commands))
+
+
 def test_fixed_subscriber_traversal_survives_delivery_key_churn(isolated_redis):
     """Deterministically move live SCAN page boundaries as bookkeeping grows."""
     for uid in range(1, 15):
