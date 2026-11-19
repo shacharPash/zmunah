@@ -3,7 +3,7 @@ python-dateutil~=4.0.0
 requests==2.34.2
 Pillow==13.0.0
 arabic-reshaper~=3.0.0
-python-bidi~=0.6.7
+python-bidi~=0.6.12
 jewcal~=0.8.0
 pytz~=2026.6
 fastapi==0.141.1
