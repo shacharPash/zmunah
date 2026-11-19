@@ -8,7 +8,7 @@ jewcal~=0.8.0
 pytz~=2026.6
 fastapi==0.141.1
 # Starlette 1.7.0 stops using the alias deprecated in AnyIO 4.15 (issue 3497).
-starlette==1.7.0
+starlette==1.10.0
 anyio==4.16.0
 uvicorn[standard]~=0.53.0
 redis~=8.1.0
