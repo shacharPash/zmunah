@@ -2,7 +2,7 @@
 -c requirements.txt
 -r requirements.in
 pytest
-httpx2>=2.16.0
+httpx2>=2.16.2
 ruff
 mypy
 types-requests
